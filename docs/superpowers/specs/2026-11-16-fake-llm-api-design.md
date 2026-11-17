@@ -34,7 +34,7 @@ Build a lightweight, self-hostable joke service that mocks an OpenAI-compatible 
 
 ## Explicit constraints
 
-- Remove Qwen-specific configuration and branding from this project. Joke templates may humorously claim to be real models, but remain generic/configurable and clearly documented as fiction.
+- Remove inherited model-specific configuration and branding from this project. Joke templates may humorously claim to be real models, but remain generic/configurable and clearly documented as fiction.
 - Marketplace operations must never download model weights.
 - No real model inference occurs.
 - This service is intended for development and humor, not production inference or deceptive deployment.

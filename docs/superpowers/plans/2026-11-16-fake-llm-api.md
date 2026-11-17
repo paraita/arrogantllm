@@ -117,5 +117,5 @@
 
 - [ ] **Step 1: Document** local install, admin login, API tokens, example client requests, marketplace metadata limits, Docker persistence, SemVer/Conventional Commits, AI assistance, and mock/not-honeypot intent.
 - [ ] **Step 2: Run full tests and production build.**
-- [ ] **Step 3: Check docs and repo for Qwen-specific remnants** outside the untouched reference directory.
+- [ ] **Step 3: Check docs and repo for inherited model-specific remnants** outside the untouched reference directory.
 - [ ] **Step 4: Commit** as `docs: document mock api setup and disclaimer`.
