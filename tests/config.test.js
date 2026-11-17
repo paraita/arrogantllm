@@ -19,6 +19,14 @@ test('requires explicit admin credentials and session secret in production', () 
     () => loadConfig({ NODE_ENV: 'production', ADMIN_PASSWORD: 'strong-password' }),
     /ADMIN_SESSION_SECRET/,
   );
+  assert.throws(
+    () => loadConfig({
+      NODE_ENV: 'production',
+      ADMIN_PASSWORD: 'strong-password',
+      ADMIN_SESSION_SECRET: 'too-short-secret',
+    }),
+    /at least 32 characters/i,
+  );
 });
 
 test('reads explicit settings from environment variables', () => {
@@ -27,7 +35,7 @@ test('reads explicit settings from environment variables', () => {
     DATA_DIR: '/var/lib/fake-llm',
     ADMIN_USERNAME: 'operator',
     ADMIN_PASSWORD: 'secret',
-    ADMIN_SESSION_SECRET: 'session-secret',
+    ADMIN_SESSION_SECRET: 'session-secret-that-is-at-least-thirty-two-characters',
     API_DELAY_MIN_MS: '25',
     API_DELAY_MAX_MS: '400',
   });
@@ -36,7 +44,7 @@ test('reads explicit settings from environment variables', () => {
   assert.equal(config.dataDir, '/var/lib/fake-llm');
   assert.equal(config.adminUsername, 'operator');
   assert.equal(config.adminPassword, 'secret');
-  assert.equal(config.adminSessionSecret, 'session-secret');
+  assert.equal(config.adminSessionSecret, 'session-secret-that-is-at-least-thirty-two-characters');
   assert.equal(config.minDelayMs, 25);
   assert.equal(config.maxDelayMs, 400);
 });

@@ -19,6 +19,9 @@ export function loadConfig(env = process.env) {
 
   if (!adminPassword) throw new Error('ADMIN_PASSWORD is required in production');
   if (!adminSessionSecret) throw new Error('ADMIN_SESSION_SECRET is required in production');
+  if (adminSessionSecret.length < 32) {
+    throw new Error('ADMIN_SESSION_SECRET must be at least 32 characters');
+  }
 
   const config = {
     nodeEnv,
