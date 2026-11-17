@@ -18,7 +18,9 @@ test('admin sessions are signed and expire', () => {
 
 test('admin sessions reject tampering and malformed cookie values', () => {
   const created = createAdminSession('session-secret', 'admin', { now: 1000, ttlMs: 5000 });
-  const tampered = `${created.token.slice(0, -1)}x`;
+  const [payload, signature] = created.token.split('.');
+  const alteredFirstSignatureChar = signature[0] === 'a' ? 'b' : 'a';
+  const tampered = `${payload}.${alteredFirstSignatureChar}${signature.slice(1)}`;
 
   assert.equal(verifyAdminSession(tampered, 'session-secret', 2000), null);
   assert.equal(verifyAdminSession('not.a.session', 'session-secret', 2000), null);
