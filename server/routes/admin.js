@@ -1,5 +1,6 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { Router } from 'express';
+import { createHuggingFaceClient, metadataProvenance } from '../marketplaces/huggingface.js';
 import {
   ADMIN_COOKIE_NAME,
   ADMIN_SESSION_TTL_MS,
@@ -82,7 +83,7 @@ function storeError(res, error) {
   return sendError(res, 500, 'Unable to update persistent catalog', 'internal_error');
 }
 
-export function createAdminRouter({ store, config, metrics, now = Date.now }) {
+export function createAdminRouter({ store, config, metrics, now = Date.now, huggingface = createHuggingFaceClient() }) {
   const router = Router();
   const secureCookie = Boolean(config.isProduction);
 
@@ -149,6 +150,51 @@ export function createAdminRouter({ store, config, metrics, now = Date.now }) {
     try {
       if (!await store.deleteModel(req.params.id)) return sendError(res, 404, 'Model not found', 'not_found_error');
       return res.status(204).end();
+    } catch (error) {
+      return storeError(res, error);
+    }
+  });
+
+  router.get('/marketplaces/huggingface/search', requireAdmin, async (req, res) => {
+    const limit = req.query.limit === undefined ? 10 : Number(req.query.limit);
+    if (!Number.isInteger(limit) || limit < 1) {
+      return sendError(res, 400, 'Search limit must be a positive integer');
+    }
+    try {
+      const data = await huggingface.searchModels(req.query.q, { limit });
+      return res.json({ data });
+    } catch (error) {
+      if (error instanceof TypeError) return sendError(res, 400, error.message);
+      return sendError(res, 502, error.message || 'Hugging Face search failed', 'marketplace_error');
+    }
+  });
+
+  router.post('/marketplaces/huggingface/import', requireAdmin, requireCsrf, async (req, res) => {
+    let details;
+    try {
+      details = await huggingface.getModelMetadata(req.body?.repoId);
+    } catch (error) {
+      if (error instanceof TypeError) return sendError(res, 400, error.message);
+      return sendError(res, 502, error.message || 'Hugging Face model lookup failed', 'marketplace_error');
+    }
+    const importedAt = new Date(now()).toISOString();
+    const { repoId, name, sourceUrl, importedAt: _sourceImportedAt, ...metadata } = details;
+    try {
+      const model = await store.createModel({
+        id: repoId,
+        name,
+        active: false,
+        source: 'huggingface',
+        sourceUrl,
+        importedAt,
+        metadata: {
+          marketplace: 'Hugging Face',
+          repoId,
+          ...metadata,
+          provenance: metadataProvenance(details),
+        },
+      });
+      return res.status(201).json(model);
     } catch (error) {
       return storeError(res, error);
     }
