@@ -1,4 +1,5 @@
-FROM node:22-alpine AS frontend-build
+# Vite emits architecture-independent assets; run its native build tools without QEMU.
+FROM --platform=$BUILDPLATFORM node:22-alpine AS frontend-build
 
 WORKDIR /app
 COPY package.json package-lock.json ./

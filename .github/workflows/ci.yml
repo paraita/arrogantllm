@@ -20,6 +20,7 @@ jobs:
   test:
     name: Test and build frontend
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Check out source
         uses: actions/checkout@v4
@@ -39,8 +40,11 @@ jobs:
 
   build-image:
     name: Build container (no publish)
+    # Publishing jobs already build both platforms on tags and merged PRs.
+    if: github.ref_type != 'tag' && github.event.action != 'closed'
     needs: test
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
     steps:
@@ -65,6 +69,7 @@ jobs:
     if: github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'main'
     needs: test
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: write
       packages: write
@@ -169,6 +174,7 @@ jobs:
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     needs: test
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
       packages: write
