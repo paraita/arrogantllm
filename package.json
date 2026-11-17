@@ -1,0 +1,31 @@
+{
+  "name": "make-believe-llm",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A humorous OpenAI-compatible mock LLM API with a model dashboard.",
+  "type": "module",
+  "engines": {
+    "node": ">=22 <23"
+  },
+  "scripts": {
+    "start": "node --env-file-if-exists=.env server/index.js",
+    "dev": "node --watch --env-file-if-exists=.env server/index.js",
+    "test": "node --test",
+    "test:watch": "node --test --watch",
+    "build": "vite build --config web/vite.config.js"
+  },
+  "dependencies": {
+    "express": "^5.3.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.0",
+    "@vitejs/plugin-react": "^5.1.1",
+    "jsdom": "^27.1.0",
+    "supertest": "^7.1.4",
+    "vite": "^7.2.2",
+    "vitest": "^4.0.8"
+  }
+}

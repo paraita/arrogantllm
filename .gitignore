@@ -4,5 +4,5 @@ data/
 .env
 *.log
 coverage/
-qwen4-api/
 .worktrees/
+/qwen4-api/
