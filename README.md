@@ -94,7 +94,7 @@ The service implements these routes:
 | `POST` | `/v1/completions` | Legacy completion-shaped placeholder output |
 | `POST` | `/v1/embeddings` | Fixed fake vectors; these are not embeddings |
 
-All `/v1` routes except `/healthz` require a valid API token. Only active models are listed or accepted. Tool calls are shaped to match the supplied schema; **no tool is executed**. Streaming sends Server-Sent Events. Responses and thinking text are configurable English templates. The dashboard's delay setting simulates response latency; it does not represent model computation time.
+All `/v1` routes require a valid API token; `/healthz` is public. Only active models are listed or accepted. Tool calls are shaped to match the supplied schema; **no tool is executed**. Streaming sends Server-Sent Events. Responses and thinking text are configurable English templates. The dashboard's delay setting simulates response latency; it does not represent model computation time.
 
 ## Docker Compose
 
