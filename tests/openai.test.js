@@ -1,10 +1,12 @@
 import test, { afterEach } from 'node:test';
 import assert from 'node:assert/strict';
+import http from 'node:http';
 import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import request from 'supertest';
 import { createApp } from '../server/index.js';
+import { waitForResponseDelay } from '../server/routes/openai.js';
 import { hashApiToken } from '../server/auth.js';
 import { createMetrics } from '../server/metrics.js';
 import { createStore } from '../server/store.js';
@@ -111,6 +113,84 @@ test('streaming chat uses SSE chunks and terminates with DONE', async () => {
   assert.match(response.text, /"object":"chat\.completion\.chunk"/);
   assert.match(response.text, /reasoning_content/);
   assert.match(response.text, /data: \[DONE\]/);
+});
+
+test('streaming chat cancels pending chunks when the client disconnects', async () => {
+  let resolveCancellation;
+  const cancelled = new Promise((resolve) => { resolveCancellation = resolve; });
+  const { store, metrics } = await makeApp();
+  await store.setSettings({
+    minDelayMs: 0,
+    maxDelayMs: 0,
+    streamChunkDelayMs: 500,
+    thinkingEnabled: true,
+    chatTemplates: ['A later content chunk should never reach this disconnected client.'],
+    thinkingTemplates: ['This thinking chunk should be cancelled.'],
+  });
+  const app = createApp({
+    config: { ...loadConfig({}), maxBodySize: '1mb' },
+    store,
+    metrics,
+    streamDelay: async (ms, response) => {
+      const alive = await waitForResponseDelay(ms, response);
+      if (!alive) resolveCancellation();
+      return alive;
+    },
+  });
+  const server = app.listen(0);
+  await new Promise((resolve) => server.once('listening', resolve));
+  const { port } = server.address();
+  const receivedFrames = [];
+  let buffer = '';
+  let resolveFirstFrame;
+  const firstFrame = new Promise((resolve) => { resolveFirstFrame = resolve; });
+  const client = http.request({
+    host: '127.0.0.1',
+    port,
+    path: '/v1/chat/completions',
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${API_TOKEN}`,
+      'Content-Type': 'application/json',
+    },
+  });
+  client.on('error', () => {});
+  client.on('response', (response) => {
+    response.on('data', (chunk) => {
+      buffer += chunk.toString();
+      const frames = buffer.split('\n\n');
+      buffer = frames.pop() || '';
+      for (const frame of frames) {
+        receivedFrames.push(frame);
+        if (receivedFrames.length === 1) resolveFirstFrame();
+      }
+    });
+  });
+  client.end(JSON.stringify({
+    model: 'bright-model:7b',
+    messages: [{ role: 'user', content: 'Please stream one answer.' }],
+    stream: true,
+  }));
+
+  try {
+    await Promise.race([
+      firstFrame,
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Timed out waiting for first SSE frame')), 2000)),
+    ]);
+    client.destroy();
+    await Promise.race([
+      cancelled,
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Timed out waiting for stream cancellation')), 2000)),
+    ]);
+    await new Promise((resolve) => setTimeout(resolve, 550));
+
+    assert.equal(receivedFrames.length, 1);
+    assert.match(receivedFrames[0], /"role":"assistant"/);
+    assert.equal(receivedFrames.some((frame) => frame.includes('[DONE]')), false);
+  } finally {
+    client.destroy();
+    await new Promise((resolve) => server.close(resolve));
+  }
 });
 
 test('required tool choice returns a schema-shaped mock call without executing it', async () => {

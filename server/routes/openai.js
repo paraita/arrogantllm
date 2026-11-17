@@ -41,7 +41,7 @@ function inputText(input) {
   }).join(' ');
 }
 
-function delay(ms, res) {
+export function waitForResponseDelay(ms, res) {
   if (res.destroyed || res.writableEnded) return Promise.resolve(false);
   return new Promise((resolve) => {
     const finish = (alive) => {
@@ -67,7 +67,7 @@ function textChunks(text) {
   return text.match(/\S+\s*/gu) || [];
 }
 
-async function streamChat(res, { id, created, model, content, thinking, toolCall, finishReason, chunkDelayMs }) {
+async function streamChat(res, { id, created, model, content, thinking, toolCall, finishReason, chunkDelayMs, streamDelay }) {
   res.status(200).set({
     'Content-Type': 'text/event-stream; charset=utf-8',
     'Cache-Control': 'no-cache, no-transform',
@@ -79,24 +79,24 @@ async function streamChat(res, { id, created, model, content, thinking, toolCall
   const firstDelta = { role: 'assistant' };
   sendSse(res, { ...eventBase(id, created, model), choices: [{ index: 0, delta: firstDelta, finish_reason: null }] });
   if (thinking) {
-    if (!await delay(chunkDelayMs, res)) return;
+    if (!await streamDelay(chunkDelayMs, res)) return;
     sendSse(res, { ...eventBase(id, created, model), choices: [{ index: 0, delta: { reasoning_content: thinking }, finish_reason: null }] });
   }
 
   if (toolCall) {
-    if (!await delay(chunkDelayMs, res)) return;
+    if (!await streamDelay(chunkDelayMs, res)) return;
     sendSse(res, {
       ...eventBase(id, created, model),
       choices: [{ index: 0, delta: { tool_calls: [{ index: 0, ...toolCall }] }, finish_reason: null }],
     });
   } else {
     for (const chunk of textChunks(content)) {
-      if (!await delay(chunkDelayMs, res)) return;
+      if (!await streamDelay(chunkDelayMs, res)) return;
       sendSse(res, { ...eventBase(id, created, model), choices: [{ index: 0, delta: { content: chunk }, finish_reason: null }] });
     }
   }
 
-  if (!await delay(chunkDelayMs, res)) return;
+  if (!await streamDelay(chunkDelayMs, res)) return;
   sendSse(res, { ...eventBase(id, created, model), choices: [{ index: 0, delta: {}, finish_reason: finishReason }] });
   res.end('data: [DONE]\n\n');
 }
@@ -111,7 +111,7 @@ function promptFor(body, path) {
   return body.input ?? '';
 }
 
-export function createOpenAIRouter({ store, config, metrics, random = Math.random }) {
+export function createOpenAIRouter({ store, config, metrics, random = Math.random, streamDelay = waitForResponseDelay }) {
   const router = Router();
 
   router.use(async (req, res, next) => {
@@ -135,7 +135,7 @@ export function createOpenAIRouter({ store, config, metrics, random = Math.rando
     const settings = await store.getSettings();
     const minDelayMs = settings.minDelayMs ?? config.minDelayMs ?? 180;
     const maxDelayMs = settings.maxDelayMs ?? config.maxDelayMs ?? 900;
-    if (!await delay(getDelayMs({ minDelayMs, maxDelayMs }, random), res)) return;
+    if (!await waitForResponseDelay(getDelayMs({ minDelayMs, maxDelayMs }, random), res)) return;
     req.mockSettings = {
       thinkingEnabled: settings.thinkingEnabled ?? true,
       thinkingTemplates: settings.thinkingTemplates || DEFAULT_THINKING_TEMPLATES,
@@ -183,6 +183,7 @@ export function createOpenAIRouter({ store, config, metrics, random = Math.rando
         toolCall,
         finishReason,
         chunkDelayMs: settings.streamChunkDelayMs,
+        streamDelay,
       });
     }
 

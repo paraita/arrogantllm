@@ -6,7 +6,7 @@ import { loadConfig } from './config.js';
 import { createMetrics } from './metrics.js';
 import { createStore } from './store.js';
 
-export function createApp({ config, store, metrics = createMetrics() }) {
+export function createApp({ config, store, metrics = createMetrics(), streamDelay }) {
   if (!config || !store) throw new TypeError('config and store are required');
   const app = express();
   app.disable('x-powered-by');
@@ -14,7 +14,7 @@ export function createApp({ config, store, metrics = createMetrics() }) {
 
   app.get('/healthz', (_req, res) => res.json({ status: 'ok' }));
   app.use('/api/admin', createAdminRouter({ store, config, metrics }));
-  app.use('/v1', createOpenAIRouter({ store, config, metrics }));
+  app.use('/v1', createOpenAIRouter({ store, config, metrics, streamDelay }));
   app.use((req, res) => res.status(404).json({ error: { message: 'Not found', type: 'invalid_request_error' } }));
   app.use(openAIErrorHandler);
   return app;
