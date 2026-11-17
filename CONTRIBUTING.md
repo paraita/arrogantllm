@@ -65,9 +65,9 @@ Use imperative, concise descriptions. Common types are `feat`, `fix`, `test`, `d
 
 ## Release process
 
-Merging a pull request into `main` runs the release job after its tests pass. The job increments the patch component of the highest existing `vMAJOR.MINOR.PATCH` tag, creates a new tag, publishes the Docker image to GHCR with the version and `latest` tags, then creates a GitHub Release with generated notes. The workflow requires `contents: write` and `packages: write` for its release job.
+Merging a pull request into `main` runs the release job after its tests pass. The job increments the patch component of the highest existing `vMAJOR.MINOR.PATCH` tag, creates a new tag, publishes the Docker image to GHCR for `linux/amd64` and `linux/arm64` with the version and `latest` tags, then creates a GitHub Release with generated notes. The workflow requires `contents: write` and `packages: write` for its release job.
 
-For an intentional manual release, a pushed `vMAJOR.MINOR.PATCH` tag still publishes a GHCR image with version, major.minor, and major tags:
+For an intentional manual release, a pushed `vMAJOR.MINOR.PATCH` tag still publishes a multi-architecture GHCR image with version, major.minor, and major tags:
 
 ```bash
 git tag v0.1.0

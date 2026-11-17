@@ -125,7 +125,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for project setup, conventions, and relea
 
 GitHub Actions runs the test suites and production build, and builds the Docker image. When a pull request is merged into `main`, the workflow increments the patch version, creates a `vMAJOR.MINOR.PATCH` tag, publishes the image to GitHub Container Registry (GHCR), and creates a GitHub Release with generated notes. Starting from `v0.1.0`, the next merged pull request creates `v0.1.1`.
 
-The image is published with its exact version and `latest` tags. You can still publish a manually created semantic-version tag:
+Images are published for both `linux/amd64` and `linux/arm64`, with their exact version and `latest` tags. Docker selects the matching architecture automatically. You can still publish a manually created semantic-version tag:
 
 ```bash
 git tag v0.1.0
