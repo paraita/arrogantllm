@@ -138,6 +138,56 @@ class CatalogStore {
     return clone(this.#state.apiTokens);
   }
 
+  async createApiToken(input) {
+    assertObject(input, 'API token');
+    if (typeof input.id !== 'string' || !input.id || input.id.length > 100) {
+      throw new TypeError('API token id must be a non-empty string');
+    }
+    if (typeof input.name !== 'string' || !input.name.trim() || input.name.length > 100) {
+      throw new TypeError('API token name must be a non-empty string of at most 100 characters');
+    }
+    if (typeof input.hash !== 'string' || !/^[a-f0-9]{64}$/.test(input.hash)) {
+      throw new TypeError('API token hash must be a SHA-256 hex digest');
+    }
+    if (typeof input.prefix !== 'string' || !input.prefix || input.prefix.length > 32) {
+      throw new TypeError('API token prefix must be a non-empty string of at most 32 characters');
+    }
+    if (typeof input.createdAt !== 'string' || Number.isNaN(Date.parse(input.createdAt))) {
+      throw new TypeError('API token createdAt must be a valid timestamp');
+    }
+    return this.#mutate((state) => {
+      if (state.apiTokens.some((item) => item.id === input.id)) {
+        throw new Error(`API token already exists: ${input.id}`);
+      }
+      const record = {
+        id: input.id,
+        name: input.name.trim(),
+        prefix: input.prefix,
+        hash: input.hash,
+        createdAt: input.createdAt,
+      };
+      state.apiTokens.push(record);
+      return record;
+    });
+  }
+
+  async deleteApiToken(id) {
+    return this.#mutate((state) => {
+      const index = state.apiTokens.findIndex((item) => item.id === id);
+      if (index === -1) return false;
+      state.apiTokens.splice(index, 1);
+      return true;
+    });
+  }
+
+  async setSettings(settings) {
+    assertObject(settings, 'Settings');
+    return this.#mutate((state) => {
+      state.settings = clone(settings);
+      return state.settings;
+    });
+  }
+
   async createModel(input) {
     return this.#mutate((state) => {
       const model = normalizeModel(input);
