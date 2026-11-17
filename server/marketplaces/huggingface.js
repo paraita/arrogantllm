@@ -1,6 +1,7 @@
 const HUB_ORIGIN = 'https://huggingface.co';
 const DEFAULT_TIMEOUT_MS = 8000;
 const MAX_SEARCH_RESULTS = 20;
+const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
 const REPOSITORY_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,95}\/[A-Za-z0-9][A-Za-z0-9._-]{0,95}$/;
 const CONTEXT_LENGTH_KEYS = [
   'max_position_embeddings',
@@ -156,23 +157,50 @@ export function createHuggingFaceClient({
   async function fetchJson(url, { allowNotFound = false } = {}) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(new Error('Hugging Face request timed out')), timeoutMs);
+    let response;
     try {
-      const response = await fetchImpl(url, {
-        headers: { Accept: 'application/json' },
-        signal: controller.signal,
-      });
+      let target = new URL(url);
+      for (let redirects = 0; ; redirects += 1) {
+        response = await fetchImpl(target, {
+          headers: { Accept: 'application/json' },
+          signal: controller.signal,
+          redirect: 'manual',
+        });
+        if (![301, 302, 303, 307, 308].includes(response.status)) break;
+        await response.body?.cancel();
+        const location = response.headers.get('location');
+        if (!location || redirects >= 3) throw new Error('Hugging Face redirect limit exceeded');
+        target = new URL(location, target);
+        if (target.origin !== HUB_ORIGIN || target.username || target.password) {
+          throw new Error('Hugging Face cross-origin redirect rejected');
+        }
+      }
       if (allowNotFound && response.status === 404) return null;
       if (!response.ok) throw new Error(`Hugging Face request failed with status ${response.status}`);
       const contentType = response.headers?.get?.('content-type') || '';
       if (contentType && !contentType.includes('application/json')) {
         throw new Error('Hugging Face returned a non-JSON response');
       }
-      return await response.json();
+      if (Number(response.headers.get('content-length')) > MAX_RESPONSE_BYTES) {
+        await response.body?.cancel();
+        throw new Error('Hugging Face response too large');
+      }
+      const chunks = [];
+      let bytes = 0;
+      for await (const chunk of response.body) {
+        bytes += chunk.byteLength;
+        if (bytes > MAX_RESPONSE_BYTES) throw new Error('Hugging Face response too large');
+        chunks.push(Buffer.from(chunk));
+      }
+      return JSON.parse(Buffer.concat(chunks).toString('utf8'));
     } catch (error) {
       if (controller.signal.aborted) throw new Error('Hugging Face request timed out', { cause: error });
       throw error;
     } finally {
       clearTimeout(timer);
+      // Close unread error/404 bodies as well as successful responses.
+      controller.abort();
+      await response?.body?.cancel().catch(() => {});
     }
   }
 

@@ -1,6 +1,7 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { Router } from 'express';
 import { createHuggingFaceClient, metadataProvenance } from '../marketplaces/huggingface.js';
+import { loginRateLimiter, requireSameOrigin } from '../security.js';
 import {
   ADMIN_COOKIE_NAME,
   ADMIN_SESSION_TTL_MS,
@@ -85,7 +86,11 @@ function storeError(res, error) {
 
 export function createAdminRouter({ store, config, metrics, now = Date.now, huggingface = createHuggingFaceClient() }) {
   const router = Router();
-  const secureCookie = Boolean(config.isProduction);
+  const secureCookie = config.adminCookieSecure ?? Boolean(config.isProduction);
+  const externalAuth = config.adminAuthEnabled === false;
+  const sessionSubject = externalAuth ? 'external-admin' : config.adminUsername;
+
+  router.use(requireSameOrigin(config));
 
   router.use((req, _res, next) => {
     const token = parseCookies(req.headers.cookie)[ADMIN_COOKIE_NAME];
@@ -94,6 +99,7 @@ export function createAdminRouter({ store, config, metrics, now = Date.now, hugg
   });
 
   function requireAdmin(req, res, next) {
+    if (externalAuth) return next();
     if (!req.adminSession || req.adminSession.sub !== config.adminUsername) {
       return sendError(res, 401, 'Admin login required', 'authentication_error');
     }
@@ -102,13 +108,14 @@ export function createAdminRouter({ store, config, metrics, now = Date.now, hugg
 
   function requireCsrf(req, res, next) {
     const provided = req.get('x-csrf-token') || '';
-    if (!provided || !matchesApiToken(provided, hashApiToken(req.adminSession.csrf))) {
+    if (!provided || req.adminSession?.sub !== sessionSubject || !matchesApiToken(provided, hashApiToken(req.adminSession.csrf))) {
       return sendError(res, 403, 'Missing or invalid CSRF token', 'csrf_error');
     }
     return next();
   }
 
-  router.post('/login', (req, res) => {
+  router.post('/login', loginRateLimiter({ limit: config.loginRateLimit, now }), (req, res) => {
+    if (externalAuth) return sendError(res, 404, 'Local login is disabled');
     const { username, password } = req.body || {};
     if (!verifyAdminPassword(username, password, config)) {
       return sendError(res, 401, 'Invalid username or password', 'authentication_error');
@@ -119,13 +126,22 @@ export function createAdminRouter({ store, config, metrics, now = Date.now, hugg
   });
 
   router.get('/session', (req, res) => {
+    if (externalAuth) {
+      let session = req.adminSession;
+      if (session?.sub !== sessionSubject) {
+        const created = createAdminSession(config.adminSessionSecret, sessionSubject, { now: now() });
+        res.setHeader('Set-Cookie', formatAdminCookie(created.token, { secure: secureCookie }));
+        session = created.payload;
+      }
+      return res.json({ authenticated: true, csrfToken: session.csrf, authMode: 'external' });
+    }
     if (!req.adminSession || req.adminSession.sub !== config.adminUsername) {
       return res.json({ authenticated: false, csrfToken: null });
     }
     return res.json({ authenticated: true, csrfToken: req.adminSession.csrf });
   });
 
-  router.post('/logout', requireAdmin, requireCsrf, (_req, res) => {
+  router.post('/logout', (req, res, next) => externalAuth ? sendError(res, 404, 'Log out through your authentication proxy') : next(), requireAdmin, requireCsrf, (_req, res) => {
     res.setHeader('Set-Cookie', clearAdminCookie({ secure: secureCookie }));
     return res.status(204).end();
   });

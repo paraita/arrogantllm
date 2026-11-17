@@ -104,7 +104,7 @@ function inferredValue(name, spec, message) {
   if (type === 'object') return {};
   if (type === 'null') return null;
   const key = name.toLowerCase();
-  if (key.includes('query') || key.includes('search') || key.includes('prompt')) return textContent(message) || 'example query';
+  if (key.includes('query') || key.includes('search') || key.includes('prompt')) return textContent(message).slice(0, 2048) || 'example query';
   if (key.includes('path') || key.includes('directory')) return '.';
   if (key.includes('command')) return 'status';
   return 'example';

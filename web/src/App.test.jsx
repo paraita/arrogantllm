@@ -74,6 +74,17 @@ describe('admin dashboard', () => {
     expect(document.body.textContent).toMatch(/ARROGANTLLM · A MOCK LLM API/);
   });
 
+  it('opens the externally authenticated dashboard and keeps CSRF on mutations', async () => {
+    api.fetch.mockImplementationOnce(async () => ({ ok: true, status: 200, json: async () => ({ authenticated: true, csrfToken: 'external-csrf', authMode: 'external' }) }));
+    render(<App />);
+    await screen.findByRole('heading', { name: /model overview/i });
+    expect(screen.queryByRole('button', { name: /sign out/i })).toBeNull();
+    expect(screen.getByText('Managed by your proxy')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Models' }));
+    fireEvent.click(await screen.findByRole('checkbox', { name: /activate bright model 7b/i }));
+    await waitFor(() => expect(api.calls.find((call) => call.method === 'PATCH')?.headers['x-csrf-token']).toBe('external-csrf'));
+  });
+
   it('shows a login screen and signs in through the local admin route', async () => {
     api.fetch.mockImplementationOnce(async () => ({ ok: true, status: 200, json: async () => ({ authenticated: false, csrfToken: null }) }));
     render(<App />);

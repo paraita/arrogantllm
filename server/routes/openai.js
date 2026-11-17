@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import { Router } from 'express';
+import { Router, json } from 'express';
 import { matchesApiToken } from '../auth.js';
+import { concurrencyLimit, limitJsonDepth } from '../security.js';
 import {
   DEFAULT_CHAT_TEMPLATES,
   DEFAULT_THINKING_TEMPLATES,
@@ -14,6 +15,10 @@ import {
 } from '../generation.js';
 
 const DEFAULT_STREAM_CHUNK_DELAY_MS = 120;
+const ENDPOINTS = new Map([
+  ['/models', 'GET'], ['/chat/completions', 'POST'], ['/responses', 'POST'],
+  ['/completions', 'POST'], ['/embeddings', 'POST'],
+]);
 
 function sendError(res, status, message, type = 'invalid_request_error', code) {
   return res.status(status).json({
@@ -116,13 +121,28 @@ export function createOpenAIRouter({ store, config, metrics, random = Math.rando
 
   router.use(async (req, res, next) => {
     const supplied = bearerToken(req.get('authorization') || '');
-    const tokens = await store.getApiTokens();
     let authenticated = false;
     if (supplied) {
+      const tokens = await store.getApiTokens();
       for (const token of tokens) authenticated = matchesApiToken(supplied, token.hash) || authenticated;
     }
-    if (!authenticated) return sendError(res, 401, 'Invalid or missing API key', 'authentication_error', 'invalid_api_key');
-    metrics?.record(`/v1${req.path}`);
+    if (!authenticated) {
+      // Reply immediately and close incomplete uploads instead of waiting for JSON.
+      if (!req.complete) res.set('Connection', 'close');
+      return sendError(res, 401, 'Invalid or missing API key', 'authentication_error', 'invalid_api_key');
+    }
+    return next();
+  });
+
+  router.use(concurrencyLimit(config.maxConcurrentRequests));
+  router.use(json({ limit: config.maxBodySize || '1mb', strict: true, inflate: false }));
+  router.use(limitJsonDepth);
+
+  router.use((req, res, next) => {
+    const endpoint = req.path.replace(/\/$/, '').toLowerCase();
+    const method = req.method === 'HEAD' ? 'GET' : req.method;
+    if (ENDPOINTS.get(endpoint) !== method) return sendError(res, 404, 'Unknown endpoint', 'invalid_request_error', 'not_found');
+    metrics?.record(`/v1${endpoint}`);
     return next();
   });
 
@@ -164,6 +184,12 @@ export function createOpenAIRouter({ store, config, metrics, random = Math.rando
     const settings = req.mockSettings;
     const last = getLastMessage(body.messages);
     const tools = Array.isArray(body.tools) ? body.tools : [];
+    if (tools.length > 32 || tools.some((tool) => {
+      const fn = tool?.function || tool;
+      return !fn || typeof fn.name !== 'string' || !fn.name.trim() || fn.name.length > 200
+        || Object.keys(fn.parameters?.properties || {}).length > 128
+        || (fn.parameters?.required?.length || 0) > 128;
+    })) return sendError(res, 400, 'Use at most 32 named tools with at most 128 parameters each');
     const wantsTool = shouldCallTool({ tools, toolChoice: body.tool_choice ?? 'auto', message: last.content || '' });
     const selectedTool = wantsTool ? selectTool(tools, body.tool_choice) : null;
     const toolCall = selectedTool ? buildToolCall(selectedTool, { message: last.content || '' }) : null;
@@ -248,6 +274,7 @@ export function createOpenAIRouter({ store, config, metrics, random = Math.rando
   router.post('/embeddings', (req, res) => {
     const body = req.body || {};
     const inputs = Array.isArray(body.input) ? body.input : [body.input ?? ''];
+    if (inputs.length > 2048) return sendError(res, 400, 'At most 2048 embedding inputs are allowed');
     const data = inputs.map((_input, index) => ({
       object: 'embedding',
       index,
@@ -272,6 +299,9 @@ export function openAIErrorHandler(error, _req, res, next) {
   }
   if (error?.type === 'entity.parse.failed' || error instanceof SyntaxError) {
     return sendError(res, 400, 'Invalid JSON in request body', 'invalid_request_error', 'invalid_json');
+  }
+  if (error?.status === 415) {
+    return sendError(res, 415, 'Unsupported request encoding', 'invalid_request_error', 'unsupported_encoding');
   }
   return sendError(res, 500, 'Internal server error', 'internal_error', 'internal_error');
 }

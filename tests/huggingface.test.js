@@ -174,3 +174,46 @@ test('admin import is authenticated, CSRF protected, inactive and records proven
     await rm(dataDir, { recursive: true, force: true });
   }
 });
+
+test('marketplace refuses cross-origin redirects and oversized metadata', async () => {
+  const urls = [];
+  const redirectClient = createHuggingFaceClient({ fetchImpl: async (url, options) => {
+    urls.push(String(url));
+    if (options.redirect !== 'manual') return jsonResponse([]);
+    return new Response(null, { status: 302, headers: { location: 'http://127.0.0.1/private' } });
+  } });
+  await assert.rejects(() => redirectClient.searchModels('test'), /redirect/i);
+  assert.equal(urls.length, 1);
+  const hugeClient = createHuggingFaceClient({ fetchImpl: async () => jsonResponse([{ padding: 'x'.repeat(2 * 1024 * 1024) }]) });
+  await assert.rejects(() => hugeClient.searchModels('test'), /too large/i);
+});
+
+test('marketplace follows only bounded same-origin redirects', async () => {
+  let calls = 0;
+  const client = createHuggingFaceClient({ fetchImpl: async () => {
+    calls += 1;
+    if (calls === 1) return new Response(null, { status: 307, headers: { location: '/api/canonical' } });
+    return jsonResponse([modelInfo()]);
+  } });
+  assert.equal((await client.searchModels('test')).length, 1);
+  assert.equal(calls, 2);
+});
+
+test('marketplace cancels response bodies on error status, non-JSON and optional 404', async () => {
+  for (const [status, contentType] of [[503, 'application/json'], [200, 'text/html']]) {
+    let cancelled = false;
+    const client = createHuggingFaceClient({ fetchImpl: async () => new Response(new ReadableStream({
+      cancel() { cancelled = true; },
+    }), { status, headers: { 'content-type': contentType } }) });
+    await assert.rejects(() => client.searchModels('test'));
+    assert.equal(cancelled, true, `body cancelled for ${status} ${contentType}`);
+  }
+  let calls = 0;
+  let cancelled = false;
+  const client = createHuggingFaceClient({ fetchImpl: async () => {
+    if (++calls === 1) return jsonResponse(modelInfo());
+    return new Response(new ReadableStream({ cancel() { cancelled = true; } }), { status: 404 });
+  } });
+  await client.getModelMetadata('example/model');
+  assert.equal(cancelled, true);
+});

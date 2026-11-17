@@ -26,7 +26,7 @@ cp .env.example .env
 docker compose up --build -d
 ```
 
-Open <http://localhost:8080>, sign in with the `ADMIN_USERNAME` and `ADMIN_PASSWORD` from `.env`, create a model, activate it, and create an API token. The generated token is shown once. Compose persists dashboard data in `./data`.
+Open <http://localhost:8080>, sign in with the `ADMIN_USERNAME` and `ADMIN_PASSWORD` from `.env`, create a model, activate it, and create an API token. The generated token is shown once. Compose persists dashboard data in `./data`. It explicitly defaults `PUBLIC_BASE_URL` to `http://localhost:8080` and binds the port to loopback. This configured local HTTP origin uses a non-Secure cookie (still HttpOnly and SameSite=Strict), so local login, mutations and logout work without TLS. Use that exact URL; for another loopback address/port, set `PUBLIC_BASE_URL` accordingly. Proxy deployments must set their public HTTPS origin.
 
 ## Run locally with Node.js
 
@@ -60,16 +60,46 @@ Provide only the origin: no `/v1` suffix and no other path. The application list
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
+| `ADMIN_AUTH_ENABLED` | `true` | Set exactly `false` to delegate dashboard access to a trusted authentication proxy |
 | `ADMIN_USERNAME` | `admin` | Dashboard login name |
-| `ADMIN_PASSWORD` | — | Dashboard login password; set before exposing the service |
-| `ADMIN_SESSION_SECRET` | — | Cookie signing secret; use a random value of at least 32 characters |
+| `ADMIN_PASSWORD` | — | Dashboard login password; required for local authentication in production |
+| `ADMIN_SESSION_SECRET` | — | Cookie signing secret; at least 32 random characters; auto-generated in external mode if omitted |
 | `PORT` | `8080` | HTTP listen port |
 | `DATA_DIR` | `./data` | Directory for model catalog, settings, and token hashes (`/data` in Compose) |
-| `PUBLIC_BASE_URL` | Dashboard origin | Optional public origin shown in API examples |
+| `PUBLIC_BASE_URL` | Dashboard origin | Public origin for examples and admin origin checks; required when local auth is disabled |
+| `LOGIN_RATE_LIMIT` | `10` | Total local login attempts per minute per process |
+| `MAX_CONCURRENT_REQUESTS` | `64` | Concurrent authenticated API requests per process, including uploads and delayed/SSE responses |
+| `MAX_ADMIN_CONCURRENT_REQUESTS` | `16` | Separate admin request budget; API traffic cannot consume it |
 | `API_DELAY_MIN_MS` | `180` | Minimum simulated API delay |
 | `API_DELAY_MAX_MS` | `900` | Maximum simulated API delay |
 
-The dashboard has its own username/password login. Authelia can also sit in front of the web UI as an additional access layer. API consumers use separate bearer tokens created in the dashboard.
+The dashboard uses local authentication by default. API consumers always use separate bearer tokens, including when local dashboard authentication is disabled.
+
+## Use Traefik and Authelia for dashboard authentication
+
+Set:
+
+```dotenv
+NODE_ENV=production
+ADMIN_AUTH_ENABLED=false
+PUBLIC_BASE_URL=https://llm.example.com
+```
+
+Remove `ADMIN_PASSWORD` and `ADMIN_SESSION_SECRET` from the environment in this mode. A random secret is generated at startup for CSRF cookies; a restart requires reloading dashboard tabs. You may set a random `ADMIN_SESSION_SECRET` of at least 32 characters for stable cookies. Example secrets are rejected in production. The public origin is required and must use HTTPS in production. Use the same origin in your browser; it is also checked on admin requests.
+
+The dashboard opens without a local login. Signed, HttpOnly, SameSite=Strict CSRF cookies and CSRF tokens still protect mutations; the cookie is Secure in production. Local login/logout endpoints are disabled and the UI hides local sign-out. End your session through Authelia. All users authorized by Authelia have full administrator access: restrict access to your admin group in Authelia.
+
+**Authelia must protect every dashboard route, including `/api/admin/*`.** Protecting only `/` exposes model configuration and API-token creation. Keep a distinct higher-priority Traefik router for exactly `/v1` and `/v1/…`; these routes retain application bearer authentication. Do not use a broad `/api` or `/v1` prefix exemption that could include other paths.
+
+The backend must be unreachable from the internet except through Traefik. Default Compose now binds to `127.0.0.1:8080`; when Traefik runs in Docker, remove host port publication and connect both services to a trusted Docker network. Every container on that network can reach the backend, so do not attach untrusted workloads. Identity/forwarded headers do not authenticate requests inside this app.
+
+A standalone [Traefik Compose example](docker-compose.traefik.example.yml) includes both routers, rate limiting, separate per-client concurrency limits (8 API / 4 dashboard requests), container restrictions and no published port. Copy it to `docker-compose.traefik.yml`, adapt the host/network/entrypoint/certificate resolver and existing `authelia@docker` middleware, then run `docker compose -f docker-compose.traefik.yml up --build -d`. Do not merge it with the default Compose file. It uses a named volume: migrate any existing catalog explicitly if switching from `./data`.
+
+API tokens are checked before JSON body parsing; invalid or missing tokens receive 401 immediately, and incomplete rejected uploads close the connection. The API and admin budgets are separate; `/healthz` and the static UI are outside both budgets. Admin login uploads still need edge protection. The example uses the direct peer IP for concurrency limits (`ipStrategy.depth=0`); clients behind a shared NAT or upstream proxy share a limit unless you configure trusted client-IP extraction.
+
+Configure your existing ForwardAuth middleware according to the [official Authelia Traefik integration](https://www.authelia.com/integration/proxies/traefik/). Restrict forwarded-header trust at the gateway to your actual upstream proxies. Configure TLS redirects, HSTS, upload timeouts and per-client connection/rate limits there as well.
+
+See [SECURITY.md](SECURITY.md) for the audit, remaining limits and deployment checks.
 
 ## Connect an OpenAI-compatible client
 

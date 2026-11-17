@@ -12,7 +12,13 @@ services:
       NODE_ENV: production
       PORT: 8080
       DATA_DIR: /data
+      # Explicit local origin; production proxy deployments must set their HTTPS origin.
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:8080}
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     volumes:
       - ./data:/data

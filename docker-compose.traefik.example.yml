@@ -1,0 +1,61 @@
+# Standalone example: do not merge with docker-compose.yml (which publishes a port).
+# Copy this file to docker-compose.traefik.yml and customize the network, host,
+# entrypoint, certificate resolver and existing Authelia middleware name.
+services:
+  arrogantllm:
+    build: .
+    image: arrogantllm:local
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 8080
+      DATA_DIR: /data
+      ADMIN_AUTH_ENABLED: "false"
+      PUBLIC_BASE_URL: https://llm.example.com
+    # No ports: only trusted containers on this network can reach the backend.
+    networks:
+      - proxy
+    volumes:
+      - arrogantllm-data:/data
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+    mem_limit: 512m
+    cpus: 1.0
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: proxy
+      traefik.http.services.arrogantllm.loadbalancer.server.port: "8080"
+      # Catch all dashboard routes, especially /api/admin, with Authelia.
+      traefik.http.routers.arrogantllm-ui.rule: Host(`llm.example.com`)
+      traefik.http.routers.arrogantllm-ui.entrypoints: websecure
+      traefik.http.routers.arrogantllm-ui.tls.certresolver: letsencrypt
+      traefik.http.routers.arrogantllm-ui.service: arrogantllm
+      traefik.http.routers.arrogantllm-ui.priority: "10"
+      traefik.http.routers.arrogantllm-ui.middlewares: arrogantllm-ui-inflight,arrogantllm-rate,authelia@docker
+      # API clients use application-issued bearer tokens, without an SSO redirect.
+      traefik.http.routers.arrogantllm-api.rule: Host(`llm.example.com`) && (Path(`/v1`) || PathPrefix(`/v1/`))
+      traefik.http.routers.arrogantllm-api.entrypoints: websecure
+      traefik.http.routers.arrogantllm-api.tls.certresolver: letsencrypt
+      traefik.http.routers.arrogantllm-api.service: arrogantllm
+      traefik.http.routers.arrogantllm-api.priority: "20"
+      traefik.http.routers.arrogantllm-api.middlewares: arrogantllm-api-inflight,arrogantllm-rate
+      # Separate per-client concurrency limits; never group by client-supplied headers.
+      # depth=0 selects the direct peer IP. Adapt only for explicitly trusted upstreams.
+      traefik.http.middlewares.arrogantllm-api-inflight.inflightreq.amount: "8"
+      traefik.http.middlewares.arrogantllm-api-inflight.inflightreq.sourcecriterion.ipstrategy.depth: "0"
+      traefik.http.middlewares.arrogantllm-ui-inflight.inflightreq.amount: "4"
+      traefik.http.middlewares.arrogantllm-ui-inflight.inflightreq.sourcecriterion.ipstrategy.depth: "0"
+      traefik.http.middlewares.arrogantllm-rate.ratelimit.average: "20"
+      traefik.http.middlewares.arrogantllm-rate.ratelimit.burst: "40"
+
+networks:
+  proxy:
+    external: true
+    name: proxy
+
+volumes:
+  arrogantllm-data:

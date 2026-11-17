@@ -64,3 +64,30 @@ test('rejects invalid ports and delay ranges', () => {
   assert.throws(() => loadConfig({ API_DELAY_MAX_MS: 'not-a-number' }), /API_DELAY_MAX_MS/);
   assert.throws(() => loadConfig({ API_DELAY_MIN_MS: '100', API_DELAY_MAX_MS: '50' }), /delay/i);
 });
+
+test('authentication is opt-out with strict configuration and an explicit origin', () => {
+  assert.equal(loadConfig({}).adminAuthEnabled, true);
+  for (const value of ['0', 'off', 'FALSE', 'typo']) {
+    assert.throws(() => loadConfig({ ADMIN_AUTH_ENABLED: value }), /ADMIN_AUTH_ENABLED/);
+  }
+  assert.throws(() => loadConfig({ ADMIN_AUTH_ENABLED: 'false' }), /PUBLIC_BASE_URL/);
+  assert.throws(() => loadConfig({ NODE_ENV: 'production', ADMIN_AUTH_ENABLED: 'false', PUBLIC_BASE_URL: 'http://llm.test' }), /HTTPS/);
+  const config = loadConfig({ NODE_ENV: 'production', ADMIN_AUTH_ENABLED: 'false', PUBLIC_BASE_URL: 'https://llm.test' });
+  assert.equal(config.adminAuthEnabled, false);
+  assert.ok(config.adminSessionSecret.length >= 32);
+});
+
+test('production rejects documented example credentials', () => {
+  assert.throws(() => loadConfig({ NODE_ENV: 'production', ADMIN_PASSWORD: 'change-this-local-password', ADMIN_SESSION_SECRET: 'replace-with-a-long-random-secret' }), /placeholder|example/i);
+});
+
+test('only explicit loopback HTTP origins opt out of Secure production cookies', () => {
+  const env = { NODE_ENV: 'production', ADMIN_PASSWORD: 'test-only-password', ADMIN_SESSION_SECRET: 'test-only-secret-with-more-than-32-characters' };
+  for (const origin of ['http://localhost:8080', 'http://127.0.0.1:8080', 'http://[::1]:8080']) {
+    assert.equal(loadConfig({ ...env, PUBLIC_BASE_URL: origin }).adminCookieSecure, false);
+  }
+  for (const origin of ['', 'https://localhost:8080', 'https://llm.test', 'http://llm.test', 'http://localhost.evil.test']) {
+    assert.equal(loadConfig({ ...env, PUBLIC_BASE_URL: origin }).adminCookieSecure, true);
+  }
+  assert.throws(() => loadConfig({ ...env, ADMIN_AUTH_ENABLED: 'false', PUBLIC_BASE_URL: 'http://localhost:8080' }), /HTTPS/);
+});

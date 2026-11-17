@@ -237,6 +237,7 @@ function ConfirmDelete({ model, onCancel, onConfirm }) {
 
 export default function App() {
   const [authState, setAuthState] = useState('checking');
+  const [authMode, setAuthMode] = useState('local');
   const [csrfToken, setCsrf] = useState(null);
   const [page, setPage] = useState('overview');
   const [models, setModels] = useState([]);
@@ -260,6 +261,7 @@ export default function App() {
     api.session().then(async (session) => {
       if (!alive) return;
       if (!session.authenticated) { setAuthState('signed-out'); return; }
+      setAuthMode(session.authMode || 'local');
       setCsrfToken(session.csrfToken); setCsrf(session.csrfToken);
       try { await refreshData(); if (alive) setAuthState('signed-in'); }
       catch (err) { if (alive) { setError(err.message); setAuthState('signed-in'); } }
@@ -312,7 +314,7 @@ export default function App() {
   return <div className="app-shell">
     <aside className={`sidebar ${mobileNav ? 'sidebar-open' : ''}`}><a className="brand" href="#overview" onClick={(event) => { event.preventDefault(); setPage('overview'); }}><span className="brand-mark"><Icon name="spark" size={22}/></span><span className="brand-text">Arrogant<span>LLM</span><small>MODEL SIMULATOR</small></span></a>
       <div className="side-status"><span className="live-dot"/> SIMULATION MODE</div><nav aria-label="Main navigation">{NAV_ITEMS.map(([id, label, icon]) => <button key={id} className={`nav-item ${page === id ? 'nav-active' : ''}`} aria-current={page === id ? 'page' : undefined} onClick={() => { setPage(id); setMobileNav(false); }}><span className="nav-icon" aria-hidden="true">{icon}</span>{label}{id === 'tokens' && tokens.length > 0 && <span className="nav-count">{tokens.length}</span>}</button>)}</nav>
-      <div className="sidebar-bottom"><div className="admin-profile"><span className="avatar">A</span><div><strong>Administrator</strong><small>Local workspace</small></div><button className="icon-button logout-button" aria-label="Sign out" onClick={handleLogout}>↗</button></div><p className="sidebar-disclaimer">Fictional responses.<br/>Real test coverage.</p></div>
+      <div className="sidebar-bottom"><div className="admin-profile"><span className="avatar">A</span><div><strong>Administrator</strong><small>{authMode === 'external' ? 'Managed by your proxy' : 'Local workspace'}</small></div>{authMode !== 'external' && <button className="icon-button logout-button" aria-label="Sign out" onClick={handleLogout}>↗</button>}</div><p className="sidebar-disclaimer">Fictional responses.<br/>Real test coverage.</p></div>
     </aside>
     <main className="main-shell"><header className="topbar"><button className="mobile-menu" aria-label="Open navigation" onClick={() => setMobileNav((value) => !value)}>☰</button><div className="breadcrumb"><span>Console</span><b>/</b><strong>{pageTitle}</strong></div><div className="topbar-right"><span className="online-indicator"><span className="live-dot"/> API online</span><span className="topbar-separator"/><span className="environment-tag">LOCAL DEV</span><span className="avatar avatar-small">A</span></div></header>
       <div className="content-wrap"><ErrorBanner onDismiss={() => setError('')}>{error}</ErrorBanner>

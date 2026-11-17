@@ -7,6 +7,7 @@ import { createOpenAIRouter, openAIErrorHandler } from './routes/openai.js';
 import { loadConfig } from './config.js';
 import { createMetrics } from './metrics.js';
 import { createStore } from './store.js';
+import { concurrencyLimit, limitJsonDepth, securityHeaders } from './security.js';
 
 const webDist = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../web/dist');
 
@@ -14,13 +15,17 @@ export function createApp({ config, store, metrics = createMetrics(), streamDela
   if (!config || !store) throw new TypeError('config and store are required');
   const app = express();
   app.disable('x-powered-by');
-  app.use(express.json({ limit: config.maxBodySize || '1mb', strict: true }));
+  app.use(securityHeaders);
 
   app.get('/healthz', (_req, res) => res.json({ status: 'ok' }));
   app.get('/runtime-config.json', (_req, res) => {
     res.set('Cache-Control', 'no-store').json({ publicBaseUrl: config.publicBaseUrl });
   });
-  app.use('/api/admin', createAdminRouter({ store, config, metrics }));
+  // Admin uploads have their own budget; inference cannot starve dashboard access.
+  // The lightweight health endpoint and static UI do not consume either budget.
+  app.use('/api/admin', concurrencyLimit(config.maxAdminConcurrentRequests ?? 16),
+    express.json({ limit: config.maxBodySize || '1mb', strict: true, inflate: false }),
+    limitJsonDepth, createAdminRouter({ store, config, metrics }));
   app.all('/v1', (_req, res) => res.status(404).json({ error: { message: 'Not found', type: 'invalid_request_error' } }));
   app.use('/v1', createOpenAIRouter({ store, config, metrics, streamDelay }));
   if (existsSync(path.join(webDirectory, 'index.html'))) {
@@ -47,6 +52,9 @@ export async function startServer() {
   const server = app.listen(config.port, '0.0.0.0', () => {
     console.log(`Mock OpenAI-compatible API listening on port ${config.port}`);
   });
+  server.headersTimeout = 15000;
+  server.requestTimeout = 30000;
+  server.keepAliveTimeout = 5000;
   return server;
 }
 
