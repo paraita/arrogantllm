@@ -78,3 +78,16 @@ test('creates a tool call with arguments matching schema types and required fiel
   assert.equal(Number.isInteger(args.limit), true);
   assert.equal(typeof args.include_archived, 'boolean');
 });
+
+test('preserves schema arguments named __proto__ as regular JSON fields', () => {
+  const tool = {
+    function: {
+      name: 'edge_case',
+      parameters: JSON.parse('{"type":"object","properties":{"__proto__":{"type":"string"}},"required":["__proto__"]}'),
+    },
+  };
+  const call = buildToolCall(tool, { id: 'call_proto' });
+  const args = JSON.parse(call.function.arguments);
+  assert.equal(Object.hasOwn(args, '__proto__'), true);
+  assert.equal(args.__proto__, 'example');
+});

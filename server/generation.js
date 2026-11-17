@@ -116,7 +116,7 @@ export function buildToolCall(tool, { id = `call_${randomUUID().replaceAll('-', 
   const parameters = fn.parameters && typeof fn.parameters === 'object' ? fn.parameters : {};
   const properties = parameters.properties && typeof parameters.properties === 'object' ? parameters.properties : {};
   const required = Array.isArray(parameters.required) ? parameters.required : [];
-  const args = {};
+  const args = Object.create(null);
   for (const [name, spec] of Object.entries(properties)) {
     args[name] = inferredValue(name, spec, message);
   }
