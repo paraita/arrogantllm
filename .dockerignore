@@ -1,0 +1,13 @@
+.git
+.worktrees
+.env
+.env.*
+!.env.example
+node_modules
+**/node_modules
+data
+coverage
+tests
+docs
+web/dist
+*.log
