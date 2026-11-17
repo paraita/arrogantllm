@@ -50,11 +50,11 @@
 
 ### Task 3: Add dashboard and consumer authentication
 
-**Files:** `server/auth.js`, `server/metrics.js`, `server/routes/admin.js`, `tests/auth.test.js`, `tests/admin.test.js`
+**Files:** `server/auth.js`, `server/metrics.js`, `server/store.js`, `server/routes/admin.js`, `tests/auth.test.js`, `tests/admin.test.js`, `tests/store.test.js`
 
-- [ ] **Step 1: Write failing tests** for login success/failure, cookie expiry/signature validation, protected admin routes, API token create/revoke, and hash-only persistence. Also cover GET/PUT settings, delay/template validation, and the protected request-activity summary.
+- [ ] **Step 1: Write failing tests** for login success/failure, cookie expiry/signature validation, protected admin routes, API token create/revoke, and hash-only persistence. Add store tests for token create/revoke and settings writes. Also cover GET/PUT settings, delay/template validation, and the protected request-activity summary.
 - [ ] **Step 2: Run auth tests** and confirm expected failures.
-- [ ] **Step 3: Implement authentication.** Use constant-time secret comparisons, HttpOnly/SameSite cookies, secure cookies when HTTPS is enabled, expiring signed sessions, CSRF checks for state-changing cookie-authenticated routes, and one-time API-token reveal. Persist validated latency/template settings and expose a protected in-memory request activity summary for the dashboard.
+- [ ] **Step 3: Implement authentication.** Use constant-time secret comparisons, HttpOnly/SameSite cookies, secure cookies when HTTPS is enabled, expiring signed sessions, CSRF checks for state-changing cookie-authenticated routes, and one-time API-token reveal. Extend the store with validated token create/revoke and settings writes. Persist validated latency/template settings and expose a protected in-memory request activity summary for the dashboard.
 - [ ] **Step 4: Run auth tests** and confirm they pass.
 - [ ] **Step 5: Commit** as `feat: secure dashboard and api tokens`.
 
