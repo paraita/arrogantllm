@@ -41,6 +41,8 @@ function Modal({ title, children, onClose, wide = false, role = 'dialog' }) {
     const focusable = focusableElements();
     (focusable[0] || dialog).focus();
     const onKeyDown = (event) => {
+      const modalBackdrops = document.querySelectorAll('.modal-backdrop');
+      if (modalBackdrops[modalBackdrops.length - 1] !== dialog.closest('.modal-backdrop')) return;
       if (event.key === 'Escape') { closeRef.current(); return; }
       if (event.key !== 'Tab') return;
       const elements = focusableElements();

@@ -124,6 +124,23 @@ describe('admin dashboard', () => {
     expect(document.activeElement).toBe(opener);
   });
 
+  it('Escape closes only the top delete confirmation and preserves model edits', async () => {
+    render(<App />);
+    await screen.findByRole('heading', { name: /model overview/i });
+    fireEvent.click(screen.getByRole('button', { name: 'Models' }));
+    fireEvent.click(await screen.findByRole('button', { name: /edit bright model 7b/i }));
+    const nameInput = await screen.findByLabelText(/display name/i);
+    fireEvent.change(nameInput, { target: { value: 'Unsaved model name' } });
+    fireEvent.click(screen.getByRole('button', { name: /delete model/i }));
+    expect(await screen.findByRole('alertdialog', { name: /delete this model/i })).toBeTruthy();
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+    expect(screen.getByRole('dialog', { name: /edit model/i })).toBeTruthy();
+    expect(screen.getByLabelText(/display name/i).value).toBe('Unsaved model name');
+  });
+
   it('searches and imports a marketplace model as inactive', async () => {
     render(<App />);
     await screen.findByRole('heading', { name: /model overview/i });
