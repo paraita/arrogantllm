@@ -1,140 +1,137 @@
-# Make Believe LLM
+# ArrogantLLM — OpenAI-Compatible Mock LLM API
 
-Make Believe LLM is a small, self-hosted **mock** OpenAI-compatible API for developing and testing applications without calling real language models. It exposes configurable fictional models, an authenticated administration dashboard, and deliberately theatrical placeholder answers, thinking text, and latency.
+**A fake LLM API with real confidence.** ArrogantLLM is a self-hosted, OpenAI-compatible mock API for local development, integration testing, and demos that should not spend money on actual inference. It serves configurable fictional models through familiar OpenAI-style endpoints, with API-token authentication and a web dashboard.
 
-**This is not a honeypot, does not run real inference, and must not be used as a honeypot.** It does not download model weights or provide a real model service. The responses are fictional jokes and must not be presented as real model output.
+The model is pretend. The latency is theater. The confidence is unfortunately real.
 
-> This project was written with the assistance of AI.
+> **This is a mock for development and humor, not a honeypot. Do not use ArrogantLLM as a honeypot or present its output as real AI inference.** It does not run language models or download model weights.
 
-## Features
+This project was written with the help of AI.
 
-- OpenAI-style `GET /v1/models`, chat completions (including SSE streaming and mock tool calls), Responses, legacy completions, and embeddings endpoints.
-- Bearer-token authentication for API consumers. Tokens are shown once and only their hashes are stored.
-- A separate local username/password login for the dashboard. An Authelia instance can optionally protect the web UI in front of this application as an additional access layer; the dashboard's own login remains enabled.
-- A model catalog with manual model creation, metadata editing, activation toggles, and deletion.
-- Hugging Face Hub search and metadata import. Imports create inactive catalog entries and **never download model weights**. The importer reads public model metadata and, when needed, the small `config.json` file for context length. Values show whether they were published, inferred from tags/names, or unavailable (`unknown`).
-- Adjustable fake reasoning text, response templates, and latency.
-- JSON persistence in `./data` locally or `/data` in Docker.
+## Why ArrogantLLM?
 
-## Requirements
+- Mock an OpenAI-compatible LLM API while developing an application, without connecting it to a real LLM or paying for tokens.
+- Test OpenAI SDK integrations, bearer-token authentication, streaming responses, model selection, and error handling.
+- Add fictional models manually or import model-card metadata from Hugging Face Hub. Imports create inactive entries and fetch metadata only; model files are never downloaded.
+- Toggle models on or off in the web dashboard and issue separate API tokens for client applications.
+- Make requests wait through configurable fake latency and receive proudly fabricated answers, reasoning text, tool-call shapes, and embeddings.
 
-- Node.js 22.x and npm
-- Docker Engine with the Compose plugin, if using Docker
+Supported routes include `GET /v1/models`, `POST /v1/chat/completions` (including SSE streaming), `POST /v1/responses`, `POST /v1/completions`, and `POST /v1/embeddings`. The routes imitate familiar shapes; they do not perform inference or execute tools.
 
-## Run locally
+## Quick start with Docker
 
-Install dependencies, create local configuration, and build the dashboard:
+```bash
+cp .env.example .env
+# Edit .env: set ADMIN_PASSWORD and a random ADMIN_SESSION_SECRET (at least 32 characters).
+docker compose up --build -d
+```
+
+Open <http://localhost:8080>, sign in with the `ADMIN_USERNAME` and `ADMIN_PASSWORD` from `.env`, create a model, activate it, and create an API token. The generated token is shown once. Compose persists dashboard data in `./data`.
+
+## Run locally with Node.js
+
+Requires Node.js 22.x and npm.
 
 ```bash
 npm ci
 cp .env.example .env
+# Edit .env and set a strong ADMIN_PASSWORD and ADMIN_SESSION_SECRET.
 npm run build
 npm start
 ```
 
-Open <http://localhost:8080>. The copied `.env` defaults to username `admin` and a local placeholder password. Change it before exposing the dashboard beyond your machine. The development-only defaults in the application are not suitable for shared or production environments. Set a unique `ADMIN_PASSWORD` and generate a strong session key:
-
-Set `PUBLIC_BASE_URL` in `.env` to the public HTTP(S) origin when the container sits behind a reverse proxy (for example, `PUBLIC_BASE_URL=https://llm.example.com`). The API Guide uses this value in generated client setup examples; it defaults to the origin used to open the dashboard. Provide the origin only, without `/v1` or another path.
+The dashboard and API are served at <http://localhost:8080>. Generate a session secret with:
 
 ```bash
 openssl rand -hex 32
 ```
 
-Put the generated value in `ADMIN_SESSION_SECRET`. Production mode refuses to start without an admin password and a session secret of at least 32 characters. Keep `.env` private; it is ignored by Git.
+For frontend development with hot reload, run `npm run dev` and `npm run dev:web` in separate terminals; open <http://localhost:5173>.
 
-The dashboard stores models, settings, and API token hashes in `DATA_DIR` (default `./data`). The Hugging Face search feature needs an internet connection; the API and dashboard otherwise run locally.
+## Configure the public API URL
 
-### Frontend development
+Set the optional `PUBLIC_BASE_URL` environment variable to the public origin clients should use, especially when running behind a reverse proxy. The dashboard's API Guide uses this value in its examples. If unset, the origin used to open the dashboard is used instead.
 
-For hot reload, run the API server and Vite in two terminals:
-
-```bash
-# Terminal 1: API and admin routes on port 8080
-npm run dev
+```dotenv
+PUBLIC_BASE_URL=https://llm.example.com
 ```
 
-```bash
-# Terminal 2: dashboard on port 5173; /api, /v1, and /healthz proxy to port 8080
-npm run dev:web
-```
+Provide only the origin: no `/v1` suffix and no other path. The application listens on port `8080` by default.
 
-Open <http://localhost:5173>. The Vite proxy keeps browser requests same-origin with the dashboard during development.
-
-## Create a model and API token
-
-1. Sign in to the dashboard.
-2. In **Models**, add a fictional model or open **Marketplace** to search Hugging Face metadata. Imports start inactive.
-3. Turn on the model's **Active** toggle to expose it through `GET /v1/models` and inference routes.
-4. In **API Tokens**, create a named token and copy its secret. The complete secret is shown once; create a replacement if you lose it.
-
-## OpenAI-compatible API
-
-Use the model ID shown in the dashboard and an API token created there:
-
-The API Guide includes cURL, Python and Node.js OpenAI SDK examples, plus OpenCode and Codex CLI setup snippets. Set `ARROGANTLLM_API_KEY` to a token from the dashboard and replace `your-active-model` with an active model ID. Claude Code expects Anthropic's Messages protocol, and the ChatGPT app does not accept custom model API base URLs, so neither connects directly without an adapter or a tool integration.
-
-```bash
-export API_BASE_URL=http://localhost:8080
-export MOCK_API_TOKEN='sk-mock-your-token'
-export MOCK_MODEL='your-model-id'
-
-curl "$API_BASE_URL/v1/models" \
-  -H "Authorization: Bearer $MOCK_API_TOKEN"
-
-curl "$API_BASE_URL/v1/chat/completions" \
-  -H "Authorization: Bearer $MOCK_API_TOKEN" \
-  -H 'Content-Type: application/json' \
-  -d "{\"model\":\"$MOCK_MODEL\",\"messages\":[{\"role\":\"user\",\"content\":\"Say hello\"}]}"
-```
-
-The service implements these routes:
-
-| Method | Endpoint | Purpose |
+| Variable | Default | Purpose |
 | --- | --- | --- |
-| `GET` | `/healthz` | Public container health check |
-| `GET` | `/v1/models` | List active fictional models; requires a Bearer token |
-| `POST` | `/v1/chat/completions` | Chat placeholders, optional SSE streaming and mock tool calls |
+| `ADMIN_USERNAME` | `admin` | Dashboard login name |
+| `ADMIN_PASSWORD` | — | Dashboard login password; set before exposing the service |
+| `ADMIN_SESSION_SECRET` | — | Cookie signing secret; use a random value of at least 32 characters |
+| `PORT` | `8080` | HTTP listen port |
+| `DATA_DIR` | `./data` | Directory for model catalog, settings, and token hashes (`/data` in Compose) |
+| `PUBLIC_BASE_URL` | Dashboard origin | Optional public origin shown in API examples |
+| `API_DELAY_MIN_MS` | `180` | Minimum simulated API delay |
+| `API_DELAY_MAX_MS` | `900` | Maximum simulated API delay |
+
+The dashboard has its own username/password login. Authelia can also sit in front of the web UI as an additional access layer. API consumers use separate bearer tokens created in the dashboard.
+
+## Connect an OpenAI-compatible client
+
+Create and activate a model in **Models**, then create a token in **API Tokens**. Use the model ID shown in the dashboard. For example:
+
+```bash
+export OPENAI_BASE_URL=http://localhost:8080/v1
+export OPENAI_API_KEY='sk-mock-your-token'
+export OPENAI_MODEL='your-active-model'
+
+curl "$OPENAI_BASE_URL/models" \
+  -H "Authorization: Bearer $OPENAI_API_KEY"
+
+curl "$OPENAI_BASE_URL/chat/completions" \
+  -H "Authorization: Bearer $OPENAI_API_KEY" \
+  -H 'Content-Type: application/json' \
+  -d "{\"model\":\"$OPENAI_MODEL\",\"messages\":[{\"role\":\"user\",\"content\":\"Say hello\"}]}"
+```
+
+The dashboard's **API Guide** provides copyable examples for cURL, Python and Node.js OpenAI SDKs, OpenCode, and Codex CLI. It uses `PUBLIC_BASE_URL` when configured. Claude Code uses Anthropic's Messages API and the ChatGPT app does not accept arbitrary API base URLs, so they need an adapter or a compatible tool integration to connect directly.
+
+All `/v1` routes require `Authorization: Bearer <token>`. Only active models are listed or accepted. `/healthz` is public for container health checks. Tool calls are shaped to match a request but are never executed. Embedding vectors and reasoning text are fictional, too.
+
+## Discover and add fictional models
+
+Open **Marketplace** in the dashboard to search public Hugging Face model metadata and import a model card into your catalog. ArrogantLLM can record details such as model name, context length, quantization, version, and flavor when metadata is available. Some details are inferred from model names or tags; missing values are marked `unknown`.
+
+Importing does not download weights, install software, or run a model. New imports start inactive. Turn on a model's **Active** toggle to expose it through the API. You can also create and edit fictional models manually.
+
+## API routes
+
+| Method | Endpoint | Behavior |
+| --- | --- | --- |
+| `GET` | `/healthz` | Public health check |
+| `GET` | `/v1/models` | List active mock models |
+| `POST` | `/v1/chat/completions` | Chat-shaped placeholder output and optional SSE stream |
 | `POST` | `/v1/responses` | Responses-shaped placeholder output |
 | `POST` | `/v1/completions` | Legacy completion-shaped placeholder output |
-| `POST` | `/v1/embeddings` | Fixed fake vectors; these are not embeddings |
+| `POST` | `/v1/embeddings` | Fixed fake vectors, not embeddings |
 
-All `/v1` routes require a valid API token; `/healthz` is public. Only active models are listed or accepted. Tool calls are shaped to match the supplied schema; **no tool is executed**. Streaming sends Server-Sent Events. Responses and thinking text are configurable English templates. The dashboard's delay setting simulates response latency; it does not represent model computation time.
-
-## Docker Compose
-
-Prepare local configuration and start the service:
+## Development and tests
 
 ```bash
-cp .env.example .env
-# Edit ADMIN_PASSWORD and set ADMIN_SESSION_SECRET to a random value from `openssl rand -hex 32`.
-docker compose up --build -d
-docker compose ps
+npm ci
+npm test
+npm run test:web
+npm run build
 ```
 
-The dashboard and API are available on port `8080`. Compose mounts `./data` at `/data`, so catalog records, token hashes, and settings persist when the container is recreated. To stop the service, run `docker compose down`; this leaves the `./data` directory in place.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for project setup, conventions, and release guidance. See [DISCLAIMER.md](DISCLAIMER.md) for the project's intended use and fictional-output notice.
 
-The image uses Node 22, runs as a non-root user, and includes a `/healthz` container health check. For a reverse-proxy deployment, put Authelia in front of the dashboard if desired and configure the proxy for the API routes as appropriate. Keep API tokens and admin secrets out of proxy labels and logs, and use HTTPS when clients connect over an untrusted network.
+## Versioned Docker images
 
-## CI and versioned images
-
-GitHub Actions runs backend tests, dashboard tests, the frontend production build, and a Docker build on branch pushes and pull requests. A tag matching `vMAJOR.MINOR.PATCH` publishes a GHCR image with version, major.minor, and major tags:
+GitHub Actions runs the test suites and production build, and builds the Docker image. Pushing a semantic-version tag (`vMAJOR.MINOR.PATCH`) publishes versioned images to GitHub Container Registry (GHCR):
 
 ```bash
 git tag v0.1.0
 git push origin v0.1.0
 ```
 
-The image is published at `ghcr.io/<owner>/<repository>:0.1.0` (replace the owner and repository with this project’s GitHub path).
+The image path is `ghcr.io/<owner>/<repository>:0.1.0`.
 
-## Troubleshooting
+## License
 
-- **Production startup says `ADMIN_PASSWORD` or `ADMIN_SESSION_SECRET` is required:** copy `.env.example` to `.env`, set both values, and make the session secret at least 32 characters.
-- **The dashboard is missing at port 8080:** run `npm run build` before `npm start`. During development, use `npm run dev:web` and `npm run dev` in separate terminals.
-- **The API returns `401`:** create a consumer token in the dashboard and send it as `Authorization: Bearer <token>`. The dashboard login password is not an API token.
-- **A model returns not found:** confirm it is active and use the exact model ID from the dashboard.
-- **Marketplace search fails:** it requires access to `huggingface.co`; imports do not retrieve model weights.
-
-## Project documents
-
-- [CONTRIBUTING.md](CONTRIBUTING.md) — setup, tests, coding conventions, and release flow.
-- [DISCLAIMER.md](DISCLAIMER.md) — intended use and fictional-output notice.
+ArrogantLLM's original code and documentation are released under the MIT License; see [LICENSE](LICENSE). Third-party dependencies and metadata keep their own licenses and notices. The direct runtime dependencies declare MIT; the dependency lockfile also includes packages with other permissive licenses and attribution terms. The project license does not replace those terms.
