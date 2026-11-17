@@ -17,6 +17,9 @@ export function createApp({ config, store, metrics = createMetrics(), streamDela
   app.use(express.json({ limit: config.maxBodySize || '1mb', strict: true }));
 
   app.get('/healthz', (_req, res) => res.json({ status: 'ok' }));
+  app.get('/runtime-config.json', (_req, res) => {
+    res.set('Cache-Control', 'no-store').json({ publicBaseUrl: config.publicBaseUrl });
+  });
   app.use('/api/admin', createAdminRouter({ store, config, metrics }));
   app.all('/v1', (_req, res) => res.status(404).json({ error: { message: 'Not found', type: 'invalid_request_error' } }));
   app.use('/v1', createOpenAIRouter({ store, config, metrics, streamDelay }));

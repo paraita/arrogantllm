@@ -48,9 +48,9 @@ jobs:
         with:
           context: .
           push: false
-          tags: make-believe-llm:ci
-          cache-from: type=gha,scope=make-believe-llm
-          cache-to: type=gha,scope=make-believe-llm,mode=max
+          tags: arrogantllm:ci
+          cache-from: type=gha,scope=arrogantllm
+          cache-to: type=gha,scope=arrogantllm,mode=max
 
   publish-image:
     name: Publish SemVer release to GHCR
@@ -105,5 +105,5 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=make-believe-llm
-          cache-to: type=gha,scope=make-believe-llm,mode=max
+          cache-from: type=gha,scope=arrogantllm
+          cache-to: type=gha,scope=arrogantllm,mode=max

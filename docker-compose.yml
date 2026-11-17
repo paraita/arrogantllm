@@ -1,10 +1,10 @@
 services:
-  make-believe-llm:
+  arrogantllm:
     build:
       context: .
       dockerfile: Dockerfile
-    image: make-believe-llm:local
-    container_name: make-believe-llm
+    image: arrogantllm:local
+    container_name: arrogantllm
     restart: unless-stopped
     env_file:
       - .env

@@ -66,6 +66,7 @@ test('built dashboard and static assets are served by the same HTTP app', async 
   const app = createApp({ config: loadConfig({}), store, webDirectory });
 
   const page = await request(app).get('/');
+  const runtimeConfig = await request(app).get('/runtime-config.json');
   const asset = await request(app).get('/assets/app.js');
   const spaRoute = await request(app).get('/models');
   const apiRoot = await request(app).get('/api');
@@ -73,6 +74,9 @@ test('built dashboard and static assets are served by the same HTTP app', async 
   assert.equal(page.status, 200);
   assert.match(page.headers['content-type'], /text\/html/);
   assert.match(page.text, /dashboard-shell/);
+  assert.equal(runtimeConfig.status, 200);
+  assert.match(runtimeConfig.headers['content-type'], /json/);
+  assert.equal(runtimeConfig.body.publicBaseUrl, null);
   assert.equal(asset.status, 200);
   assert.match(asset.text, /window.ready/);
   assert.match(spaRoute.text, /dashboard-shell/);
@@ -80,6 +84,20 @@ test('built dashboard and static assets are served by the same HTTP app', async 
   assert.match(apiRoot.headers['content-type'], /application\/json/);
   assert.equal(v1Root.status, 404);
   assert.match(v1Root.headers['content-type'], /application\/json/);
+});
+
+test('publishes configured public base URL to the dashboard at runtime', async () => {
+  const dataDir = await mkdtemp(path.join(os.tmpdir(), 'fake-llm-runtime-config-'));
+  const webDirectory = await mkdtemp(path.join(os.tmpdir(), 'fake-llm-runtime-build-'));
+  tempDirs.push(dataDir, webDirectory);
+  await writeFile(path.join(webDirectory, 'index.html'), '<main>dashboard-shell</main>');
+  const store = await createStore({ dataDir });
+  const config = { ...loadConfig({ PUBLIC_BASE_URL: 'https://llm.example.test' }) };
+  const app = createApp({ config, store, webDirectory });
+  const runtimeConfig = await request(app).get('/runtime-config.json');
+
+  assert.equal(runtimeConfig.status, 200);
+  assert.equal(runtimeConfig.body.publicBaseUrl, 'https://llm.example.test');
 });
 
 test('model and inference endpoints require a valid Bearer token', async () => {

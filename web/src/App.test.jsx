@@ -67,6 +67,13 @@ describe('admin dashboard', () => {
   });
   afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
+  it('uses ArrogantLLM as the visible product name throughout the dashboard', async () => {
+    render(<App />);
+    await screen.findByRole('heading', { name: /model overview/i });
+    expect(screen.getByRole('link', { name: /arrogantllm/i })).toBeTruthy();
+    expect(document.body.textContent).toMatch(/ARROGANTLLM · A MOCK LLM API/);
+  });
+
   it('shows a login screen and signs in through the local admin route', async () => {
     api.fetch.mockImplementationOnce(async () => ({ ok: true, status: 200, json: async () => ({ authenticated: false, csrfToken: null }) }));
     render(<App />);
@@ -103,6 +110,22 @@ describe('admin dashboard', () => {
     fireEvent.change(screen.getByLabelText(/display name/i), { target: { value: 'Comedy Model Updated' } });
     fireEvent.click(screen.getByRole('button', { name: /save model/i }));
     expect(await screen.findByText(/comedy model updated/i)).toBeTruthy();
+  });
+
+  it('shows client setup examples using the configured public URL', async () => {
+    window.__ARROGANTLLM_PUBLIC_BASE_URL__ = 'https://llm.example.test';
+    render(<App />);
+    await screen.findByRole('heading', { name: /model overview/i });
+    fireEvent.click(screen.getByRole('button', { name: 'API Guide' }));
+
+    expect(await screen.findByText('https://llm.example.test/v1')).toBeTruthy();
+    expect(screen.getByText(/ARROGANTLLM_API_KEY.*OPENAI_BASE_URL/s)).toBeTruthy();
+    expect(screen.getByText(/opencode\.json/)).toBeTruthy();
+    expect(document.body.textContent).toMatch(/opencode run --model arrogantllm\/your-active-model/);
+    expect(document.body.textContent).toMatch(/codex exec --model your-active-model/);
+    expect(document.body.textContent).toMatch(/Claude Code: speaks Anthropic's Messages API/);
+    expect(document.body.textContent).toMatch(/ChatGPT app: does not accept a custom model API base URL/);
+    delete window.__ARROGANTLLM_PUBLIC_BASE_URL__;
   });
 
   it('traps keyboard focus in dialogs and restores focus to the opener', async () => {

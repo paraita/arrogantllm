@@ -11,6 +11,7 @@ test('provides safe local defaults for development', () => {
   assert.equal(config.adminPassword, 'dev-only-change-me');
   assert.equal(config.minDelayMs, 180);
   assert.equal(config.maxDelayMs, 900);
+  assert.equal(config.publicBaseUrl, null);
 });
 
 test('requires explicit admin credentials and session secret in production', () => {
@@ -38,6 +39,7 @@ test('reads explicit settings from environment variables', () => {
     ADMIN_SESSION_SECRET: 'session-secret-that-is-at-least-thirty-two-characters',
     API_DELAY_MIN_MS: '25',
     API_DELAY_MAX_MS: '400',
+    PUBLIC_BASE_URL: 'https://llm.example.test/',
   });
 
   assert.equal(config.port, 9090);
@@ -47,6 +49,13 @@ test('reads explicit settings from environment variables', () => {
   assert.equal(config.adminSessionSecret, 'session-secret-that-is-at-least-thirty-two-characters');
   assert.equal(config.minDelayMs, 25);
   assert.equal(config.maxDelayMs, 400);
+  assert.equal(config.publicBaseUrl, 'https://llm.example.test');
+});
+
+test('rejects non-origin public base URLs', () => {
+  assert.throws(() => loadConfig({ PUBLIC_BASE_URL: 'ftp://llm.example.test' }), /PUBLIC_BASE_URL/);
+  assert.throws(() => loadConfig({ PUBLIC_BASE_URL: 'https://user:secret@llm.example.test' }), /PUBLIC_BASE_URL/);
+  assert.throws(() => loadConfig({ PUBLIC_BASE_URL: 'https://llm.example.test/api' }), /PUBLIC_BASE_URL/);
 });
 
 test('rejects invalid ports and delay ranges', () => {

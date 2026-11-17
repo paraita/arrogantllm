@@ -34,6 +34,8 @@ npm start
 
 Open <http://localhost:8080>. The copied `.env` defaults to username `admin` and a local placeholder password. Change it before exposing the dashboard beyond your machine. The development-only defaults in the application are not suitable for shared or production environments. Set a unique `ADMIN_PASSWORD` and generate a strong session key:
 
+Set `PUBLIC_BASE_URL` in `.env` to the public HTTP(S) origin when the container sits behind a reverse proxy (for example, `PUBLIC_BASE_URL=https://llm.example.com`). The API Guide uses this value in generated client setup examples; it defaults to the origin used to open the dashboard. Provide the origin only, without `/v1` or another path.
+
 ```bash
 openssl rand -hex 32
 ```
@@ -68,6 +70,8 @@ Open <http://localhost:5173>. The Vite proxy keeps browser requests same-origin 
 ## OpenAI-compatible API
 
 Use the model ID shown in the dashboard and an API token created there:
+
+The API Guide includes cURL, Python and Node.js OpenAI SDK examples, plus OpenCode and Codex CLI setup snippets. Set `ARROGANTLLM_API_KEY` to a token from the dashboard and replace `your-active-model` with an active model ID. Claude Code expects Anthropic's Messages protocol, and the ChatGPT app does not accept custom model API base URLs, so neither connects directly without an adapter or a tool integration.
 
 ```bash
 export API_BASE_URL=http://localhost:8080

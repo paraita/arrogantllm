@@ -11,6 +11,21 @@ function readInteger(env, name, fallback, { min, max }) {
   return value;
 }
 
+function readPublicBaseUrl(raw) {
+  if (raw === undefined || raw.trim() === '') return null;
+  let url;
+  try {
+    url = new URL(raw.trim());
+  } catch {
+    throw new Error('PUBLIC_BASE_URL must be an HTTP or HTTPS origin, such as https://llm.example.com');
+  }
+  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password
+    || url.pathname !== '/' || url.search || url.hash) {
+    throw new Error('PUBLIC_BASE_URL must be an HTTP or HTTPS origin, such as https://llm.example.com');
+  }
+  return url.origin;
+}
+
 export function loadConfig(env = process.env) {
   const nodeEnv = env.NODE_ENV || 'development';
   const isProduction = nodeEnv === 'production';
@@ -28,6 +43,7 @@ export function loadConfig(env = process.env) {
     isProduction,
     port: readInteger(env, 'PORT', 8080, { min: 1, max: 65535 }),
     dataDir: path.resolve(env.DATA_DIR || './data'),
+    publicBaseUrl: readPublicBaseUrl(env.PUBLIC_BASE_URL),
     adminUsername: env.ADMIN_USERNAME || 'admin',
     adminPassword,
     adminSessionSecret,

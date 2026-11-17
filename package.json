@@ -1,5 +1,5 @@
 {
-  "name": "make-believe-llm",
+  "name": "arrogantllm",
   "version": "0.1.0",
   "private": true,
   "description": "A humorous OpenAI-compatible mock LLM API with a model dashboard.",
