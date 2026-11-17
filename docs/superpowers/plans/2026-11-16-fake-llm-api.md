@@ -14,12 +14,12 @@
 
 - `server/index.js`: Express startup, static frontend and health route.
 - `server/config.js`: environment validation and runtime defaults.
-- `server/store.js`: atomic JSON persistence and catalog operations.
+- `server/store.js`: atomic JSON persistence and catalog, API settings and token operations.
 - `server/auth.js`: password verification, signed admin cookie, API token hashing/validation.
 - `server/marketplaces/huggingface.js`: metadata-only Hub search and model mapping.
-- `server/routes/admin.js`: login/logout and protected model/token/settings routes.
+- `server/routes/admin.js`: login/logout and protected model/token/settings/summary routes.
 - `server/routes/openai.js`: OpenAI-shaped model, chat, responses, completions and embedding endpoints.
-- `server/generation.js`: delay, template selection, usage, thinking, tool-call and SSE helpers.
+- `server/generation.js`: delay, template selection, usage, thinking, tool-call and SSE helpers. `server/metrics.js` tracks in-memory request activity.
 - `web/src/`: dashboard UI, login, API client, styling and unit tests.
 - `tests/`: backend unit and HTTP integration tests.
 - Root docs, Docker files and `.github/workflows/ci.yml`: contributor instructions and release pipeline.
@@ -30,9 +30,9 @@
 
 **Files:** `package.json`, `.gitignore`, `.env.example`, `server/config.js`, `tests/config.test.js`
 
-- [ ] **Step 1: Write failing tests** for required environment values, development defaults, and invalid delay ranges.
-- [ ] **Step 2: Run `npm test`** and confirm tests fail because config module is absent.
-- [ ] **Step 3: Add minimal package scripts/dependencies and config validation.** Pin supported Node engine and provide `test`, `test:watch`, `build`, and `start` scripts.
+- [ ] **Step 1: Scaffold `package.json` with a `test` script using `node --test` and the pinned Node engine, then write failing config tests.** Include backend dependencies (Express 5, Supertest) and frontend dependencies (React, Vite, Vitest, Testing Library) so later plan tasks have a defined toolchain.
+- [ ] **Step 2: Run `npm test`** and confirm tests fail because the config module is absent.
+- [ ] **Step 3: Implement environment config validation and add `test:watch`, `test:web`, `build`, and `start` scripts.** Backend tests use Node's built-in runner; frontend unit tests use Vitest.
 - [ ] **Step 4: Run `npm test`** and confirm config tests pass.
 - [ ] **Step 5: Commit** as `chore: initialize fake llm api project`.
 
@@ -50,11 +50,11 @@
 
 ### Task 3: Add dashboard and consumer authentication
 
-**Files:** `server/auth.js`, `server/routes/admin.js`, `tests/auth.test.js`, `tests/admin.test.js`
+**Files:** `server/auth.js`, `server/metrics.js`, `server/routes/admin.js`, `tests/auth.test.js`, `tests/admin.test.js`
 
-- [ ] **Step 1: Write failing tests** for login success/failure, cookie expiry/signature validation, protected admin routes, API token create/revoke, and hash-only persistence.
+- [ ] **Step 1: Write failing tests** for login success/failure, cookie expiry/signature validation, protected admin routes, API token create/revoke, and hash-only persistence. Also cover GET/PUT settings, delay/template validation, and the protected request-activity summary.
 - [ ] **Step 2: Run auth tests** and confirm expected failures.
-- [ ] **Step 3: Implement authentication.** Use constant-time secret comparisons, HttpOnly/SameSite cookies, secure cookies when HTTPS is enabled, expiring signed sessions, CSRF checks for state-changing cookie-authenticated routes, and one-time API-token reveal.
+- [ ] **Step 3: Implement authentication.** Use constant-time secret comparisons, HttpOnly/SameSite cookies, secure cookies when HTTPS is enabled, expiring signed sessions, CSRF checks for state-changing cookie-authenticated routes, and one-time API-token reveal. Persist validated latency/template settings and expose a protected in-memory request activity summary for the dashboard.
 - [ ] **Step 4: Run auth tests** and confirm they pass.
 - [ ] **Step 5: Commit** as `feat: secure dashboard and api tokens`.
 
@@ -84,9 +84,9 @@
 
 **Files:** `server/marketplaces/huggingface.js`, `server/routes/admin.js`, `tests/huggingface.test.js`
 
-- [ ] **Step 1: Write failing tests** using a local mocked HTTP response for search, metadata mapping, missing fields, error handling, and confirming no weight/download URLs are requested.
+- [ ] **Step 1: Write failing tests** using a local mocked HTTP response for search, metadata mapping, missing fields, error handling, source and import timestamp persistence, field provenance (`published`, `inferred`, or `unknown`), tag/config parsing, and confirming no weight/download URLs are requested.
 - [ ] **Step 2: Run marketplace tests** and confirm expected failures.
-- [ ] **Step 3: Implement Hub search/info calls** with bounded result counts and timeouts. Map repo ID, task, downloads, license, context length, quantization, version and flavor; mark unavailable values as unknown rather than inventing facts.
+- [ ] **Step 3: Implement Hub search/info calls** with bounded result counts and timeouts. Map repo ID, task, downloads, license, context length, quantization, version and flavor; persist source and import timestamp; record field provenance; mark unavailable values as unknown rather than inventing facts.
 - [ ] **Step 4: Run marketplace tests** and confirm they pass.
 - [ ] **Step 5: Commit** as `feat: import model metadata from hugging face`.
 
@@ -94,7 +94,7 @@
 
 **Files:** `web/index.html`, `web/vite.config.js`, `web/src/App.jsx`, `web/src/api.js`, `web/src/styles.css`, `web/src/*.test.jsx`, root `package.json`
 
-- [ ] **Step 1: Write failing UI tests** for login, dashboard model list/toggles, add model, marketplace search/import, one-time token display, and revoke.
+- [ ] **Step 1: Write failing UI tests** for login, dashboard model list/toggles, add and edit model, marketplace search/import, editable latency/templates settings, request activity summary, one-time token display, and revoke.
 - [ ] **Step 2: Run frontend tests** and confirm expected failures.
 - [ ] **Step 3: Implement the responsive English dark operations dashboard** with loading, empty, and error states; use accessible labels and confirmation for destructive actions.
 - [ ] **Step 4: Run frontend tests and `npm run build`** and confirm pass.
@@ -107,7 +107,7 @@
 **Files:** `Dockerfile`, `docker-compose.yml`, `.dockerignore`, `.github/workflows/ci.yml`
 
 - [ ] **Step 1: Add workflow configuration checks** and container smoke test instructions.
-- [ ] **Step 2: Implement multi-stage non-root Docker build**, health check and persistent data volume. Configure GitHub Actions to test/build on PRs and publish GHCR image tags from SemVer releases.
+- [ ] **Step 2: Implement multi-stage non-root Docker build**, health check and persistent data volume. Configure GitHub Actions to test and build on pull requests and all branch pushes, and publish GHCR image tags only for `vMAJOR.MINOR.PATCH` tags.
 - [ ] **Step 3: Build image and validate Compose configuration** locally where Docker is available.
 - [ ] **Step 4: Commit** as `ci: build and publish versioned docker images`.
 
