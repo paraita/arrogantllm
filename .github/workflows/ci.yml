@@ -7,6 +7,11 @@ on:
     tags:
       - 'v*'
   pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - closed
 
 permissions:
   contents: read
@@ -52,6 +57,106 @@ jobs:
           cache-from: type=gha,scope=arrogantllm
           cache-to: type=gha,scope=arrogantllm,mode=max
 
+  release-after-merge:
+    name: Version, publish, and release merged PR
+    if: github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'main'
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - name: Calculate and create next patch tag
+        id: version
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const sha = context.payload.pull_request.merge_commit_sha;
+            if (!sha) throw new Error('The merged pull request has no merge commit SHA.');
+            for (let attempt = 1; attempt <= 5; attempt += 1) {
+              const tags = await github.paginate(github.rest.repos.listTags, {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                per_page: 100,
+              });
+              const versions = tags
+                .map(({ name }) => name.match(/^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/))
+                .filter(Boolean)
+                .map((match) => match.slice(1).map(Number))
+                .sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2]);
+              const latest = versions.at(-1) ?? [0, 0, 0];
+              const next = `v${latest[0]}.${latest[1]}.${latest[2] + 1}`;
+              try {
+                await github.rest.git.createRef({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  ref: `refs/tags/${next}`,
+                  sha,
+                });
+                core.setOutput('tag', next);
+                core.setOutput('version', next.slice(1));
+                core.info(`Created ${next} at ${sha}`);
+                return;
+              } catch (error) {
+                if (![409, 422].includes(error.status) || attempt === 5) throw error;
+                core.warning(`Tag ${next} already exists; recalculating version (attempt ${attempt + 1}).`);
+              }
+            }
+
+      - name: Check out release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.version.outputs.tag }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and publish versioned image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}:${{ steps.version.outputs.version }}
+            ghcr.io/${{ github.repository }}:latest
+          labels: |
+            org.opencontainers.image.title=ArrogantLLM
+            org.opencontainers.image.description=Humorous OpenAI-compatible mock LLM API
+            org.opencontainers.image.version=${{ steps.version.outputs.version }}
+            org.opencontainers.image.revision=${{ github.event.pull_request.merge_commit_sha }}
+          cache-from: type=gha,scope=arrogantllm
+          cache-to: type=gha,scope=arrogantllm,mode=max
+
+      - name: Create GitHub Release
+        uses: actions/github-script@v7
+        env:
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+        with:
+          script: |
+            const tag = process.env.RELEASE_TAG;
+            const notes = await github.rest.repos.generateReleaseNotes({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: tag,
+            });
+            await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: tag,
+              name: `ArrogantLLM ${tag}`,
+              body: `${notes.data.body}\n\nDocker image: \`ghcr.io/${context.repo.owner}/${context.repo.repo}:${tag.slice(1)}\``,
+              generate_release_notes: false,
+              draft: false,
+              prerelease: false,
+            });
+
   publish-image:
     name: Publish SemVer release to GHCR
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
@@ -95,7 +200,7 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
           labels: |
-            org.opencontainers.image.title=Make Believe LLM
+            org.opencontainers.image.title=ArrogantLLM
             org.opencontainers.image.description=Humorous OpenAI-compatible mock LLM API
       - name: Build and publish versioned image
         if: steps.semver.outputs.valid == 'true'

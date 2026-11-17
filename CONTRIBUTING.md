@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for helping improve Make Believe LLM. Keep changes small, tested, and consistent with the project's purpose: a clearly labeled development mock with no real inference.
+Thanks for helping improve ArrogantLLM. Keep changes small, tested, and consistent with the project's purpose: a clearly labeled development mock with no real inference.
 
 ## Development setup
 
@@ -65,11 +65,13 @@ Use imperative, concise descriptions. Common types are `feat`, `fix`, `test`, `d
 
 ## Release process
 
-The workflow publishes a container to GitHub Container Registry only when a pushed tag matches `vMAJOR.MINOR.PATCH`. Create and push the tag after the release is ready:
+Merging a pull request into `main` runs the release job after its tests pass. The job increments the patch component of the highest existing `vMAJOR.MINOR.PATCH` tag, creates a new tag, publishes the Docker image to GHCR with the version and `latest` tags, then creates a GitHub Release with generated notes. The workflow requires `contents: write` and `packages: write` for its release job.
+
+For an intentional manual release, a pushed `vMAJOR.MINOR.PATCH` tag still publishes a GHCR image with version, major.minor, and major tags:
 
 ```bash
 git tag v0.1.0
 git push origin v0.1.0
 ```
 
-The GHCR image receives version, major.minor, and major tags. Branch pushes and pull requests run CI and build the image without publishing it.
+Branch pushes and pull request updates run CI and build the image without publishing it.
