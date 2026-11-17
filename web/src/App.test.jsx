@@ -105,6 +105,25 @@ describe('admin dashboard', () => {
     expect(await screen.findByText(/comedy model updated/i)).toBeTruthy();
   });
 
+  it('traps keyboard focus in dialogs and restores focus to the opener', async () => {
+    render(<App />);
+    await screen.findByRole('heading', { name: /model overview/i });
+    fireEvent.click(screen.getByRole('button', { name: 'Models' }));
+    const opener = await screen.findByRole('button', { name: /add model/i });
+    opener.focus();
+    fireEvent.click(opener);
+    const close = await screen.findByRole('button', { name: /close dialog/i });
+    const save = screen.getByRole('button', { name: /save model/i });
+    await waitFor(() => expect(document.activeElement).toBe(close));
+    fireEvent.keyDown(close, { key: 'Tab', shiftKey: true });
+    expect(document.activeElement).toBe(save);
+    fireEvent.keyDown(save, { key: 'Tab' });
+    expect(document.activeElement).toBe(close);
+    fireEvent.keyDown(close, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(document.activeElement).toBe(opener);
+  });
+
   it('searches and imports a marketplace model as inactive', async () => {
     render(<App />);
     await screen.findByRole('heading', { name: /model overview/i });

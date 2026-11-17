@@ -18,11 +18,14 @@ export function createApp({ config, store, metrics = createMetrics(), streamDela
 
   app.get('/healthz', (_req, res) => res.json({ status: 'ok' }));
   app.use('/api/admin', createAdminRouter({ store, config, metrics }));
+  app.all('/v1', (_req, res) => res.status(404).json({ error: { message: 'Not found', type: 'invalid_request_error' } }));
   app.use('/v1', createOpenAIRouter({ store, config, metrics, streamDelay }));
   if (existsSync(path.join(webDirectory, 'index.html'))) {
     app.use(express.static(webDirectory, { index: false, fallthrough: true }));
     app.use((req, res, next) => {
-      if (req.method === 'GET' && !req.path.startsWith('/api/') && !req.path.startsWith('/v1/') && req.path !== '/healthz') {
+      const isApiPath = req.path === '/api' || req.path.startsWith('/api/');
+      const isInferencePath = req.path === '/v1' || req.path.startsWith('/v1/');
+      if (req.method === 'GET' && !isApiPath && !isInferencePath && req.path !== '/healthz') {
         return res.sendFile('index.html', { root: webDirectory });
       }
       return next();

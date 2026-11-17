@@ -68,12 +68,18 @@ test('built dashboard and static assets are served by the same HTTP app', async 
   const page = await request(app).get('/');
   const asset = await request(app).get('/assets/app.js');
   const spaRoute = await request(app).get('/models');
+  const apiRoot = await request(app).get('/api');
+  const v1Root = await request(app).get('/v1');
   assert.equal(page.status, 200);
   assert.match(page.headers['content-type'], /text\/html/);
   assert.match(page.text, /dashboard-shell/);
   assert.equal(asset.status, 200);
   assert.match(asset.text, /window.ready/);
   assert.match(spaRoute.text, /dashboard-shell/);
+  assert.equal(apiRoot.status, 404);
+  assert.match(apiRoot.headers['content-type'], /application\/json/);
+  assert.equal(v1Root.status, 404);
+  assert.match(v1Root.headers['content-type'], /application\/json/);
 });
 
 test('model and inference endpoints require a valid Bearer token', async () => {

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, setCsrfToken } from './api.js';
 import './styles.css';
 
@@ -29,13 +29,39 @@ function ErrorBanner({ children, onDismiss }) {
 }
 
 function Modal({ title, children, onClose, wide = false, role = 'dialog' }) {
+  const dialogRef = useRef(null);
+  const closeRef = useRef(onClose);
+  useEffect(() => { closeRef.current = onClose; }, [onClose]);
   useEffect(() => {
-    const onKeyDown = (event) => { if (event.key === 'Escape') onClose(); };
+    const dialog = dialogRef.current;
+    const previouslyFocused = document.activeElement;
+    const focusableSelector = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+    const focusableElements = () => [...dialog.querySelectorAll(focusableSelector)]
+      .filter((element) => !element.hasAttribute('hidden') && element.getAttribute('aria-hidden') !== 'true');
+    const focusable = focusableElements();
+    (focusable[0] || dialog).focus();
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') { closeRef.current(); return; }
+      if (event.key !== 'Tab') return;
+      const elements = focusableElements();
+      const first = elements[0];
+      const last = elements.at(-1);
+      if (!first || !last) { event.preventDefault(); dialog.focus(); return; }
+      const active = document.activeElement;
+      if (event.shiftKey && (active === first || !dialog.contains(active))) {
+        event.preventDefault(); last.focus();
+      } else if (!event.shiftKey && (active === last || !dialog.contains(active))) {
+        event.preventDefault(); first.focus();
+      }
+    };
     document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
-  }, [onClose]);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      if (previouslyFocused instanceof HTMLElement && previouslyFocused.isConnected) previouslyFocused.focus();
+    };
+  }, []);
   return <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-    <section className={`modal${wide ? ' modal-wide' : ''}`} role={role} aria-modal="true" aria-label={title}>
+    <section ref={dialogRef} className={`modal${wide ? ' modal-wide' : ''}`} role={role} aria-modal="true" aria-label={title} tabIndex={-1}>
       <div className="modal-heading"><div><span className="eyebrow">ADMIN CONSOLE</span><h2>{title}</h2></div><button className="icon-button" aria-label="Close dialog" onClick={onClose}><Icon name="close"/></button></div>
       {children}
     </section>
