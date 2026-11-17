@@ -1,7 +1,7 @@
 import test, { afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import request from 'supertest';
@@ -53,6 +53,27 @@ test('health is public and does not count as inference traffic', async () => {
   assert.equal(response.status, 200);
   assert.equal(response.body.status, 'ok');
   assert.equal(metrics.summary().totalRequests, 0);
+});
+
+test('built dashboard and static assets are served by the same HTTP app', async () => {
+  const dataDir = await mkdtemp(path.join(os.tmpdir(), 'fake-llm-ui-data-'));
+  const webDirectory = await mkdtemp(path.join(os.tmpdir(), 'fake-llm-ui-build-'));
+  tempDirs.push(dataDir, webDirectory);
+  await writeFile(path.join(webDirectory, 'index.html'), '<main>dashboard-shell</main>');
+  await mkdir(path.join(webDirectory, 'assets'), { recursive: true });
+  await writeFile(path.join(webDirectory, 'assets', 'app.js'), 'window.ready = true;');
+  const store = await createStore({ dataDir });
+  const app = createApp({ config: loadConfig({}), store, webDirectory });
+
+  const page = await request(app).get('/');
+  const asset = await request(app).get('/assets/app.js');
+  const spaRoute = await request(app).get('/models');
+  assert.equal(page.status, 200);
+  assert.match(page.headers['content-type'], /text\/html/);
+  assert.match(page.text, /dashboard-shell/);
+  assert.equal(asset.status, 200);
+  assert.match(asset.text, /window.ready/);
+  assert.match(spaRoute.text, /dashboard-shell/);
 });
 
 test('model and inference endpoints require a valid Bearer token', async () => {

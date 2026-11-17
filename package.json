@@ -10,9 +10,10 @@
   "scripts": {
     "start": "node --env-file-if-exists=.env server/index.js",
     "dev": "node --watch --env-file-if-exists=.env server/index.js",
-    "test": "node --test",
-    "test:watch": "node --test --watch",
-    "build": "vite build --config web/vite.config.js"
+    "test": "node --test tests/*.test.js",
+    "test:watch": "node --test --watch tests/*.test.js",
+    "build": "vite build --config web/vite.config.js",
+    "test:web": "vitest run --config web/vite.config.js"
   },
   "dependencies": {
     "express": "^5.3.0",

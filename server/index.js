@@ -1,12 +1,16 @@
 import express from 'express';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { existsSync } from 'node:fs';
+import path from 'node:path';
 import { createAdminRouter } from './routes/admin.js';
 import { createOpenAIRouter, openAIErrorHandler } from './routes/openai.js';
 import { loadConfig } from './config.js';
 import { createMetrics } from './metrics.js';
 import { createStore } from './store.js';
 
-export function createApp({ config, store, metrics = createMetrics(), streamDelay }) {
+const webDist = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../web/dist');
+
+export function createApp({ config, store, metrics = createMetrics(), streamDelay, webDirectory = webDist }) {
   if (!config || !store) throw new TypeError('config and store are required');
   const app = express();
   app.disable('x-powered-by');
@@ -15,6 +19,15 @@ export function createApp({ config, store, metrics = createMetrics(), streamDela
   app.get('/healthz', (_req, res) => res.json({ status: 'ok' }));
   app.use('/api/admin', createAdminRouter({ store, config, metrics }));
   app.use('/v1', createOpenAIRouter({ store, config, metrics, streamDelay }));
+  if (existsSync(path.join(webDirectory, 'index.html'))) {
+    app.use(express.static(webDirectory, { index: false, fallthrough: true }));
+    app.use((req, res, next) => {
+      if (req.method === 'GET' && !req.path.startsWith('/api/') && !req.path.startsWith('/v1/') && req.path !== '/healthz') {
+        return res.sendFile('index.html', { root: webDirectory });
+      }
+      return next();
+    });
+  }
   app.use((req, res) => res.status(404).json({ error: { message: 'Not found', type: 'invalid_request_error' } }));
   app.use(openAIErrorHandler);
   return app;
